@@ -1,0 +1,51 @@
+{
+  "name": "dsh-thinking-slider",
+  "version": "1.0.0",
+  "private": true,
+  "description": "思考强度滑条（Thinking Slider）：接管输入框右侧那枚官方的「模型 · 推理等级」chip（隐藏官方座位），把推理等级从菜单点选换成可拖拽的滑条——拖动中连续跟手、松手吸附到最近档位并且只提交一次请求；轨道内自绘填充、刻度点与白圆钮，只有最高档（xhigh/max/ultra）才铺品牌色流动渐变，轨道两端标出最低/最高档名，同一张卡片还能展开官方模型清单。键盘 ←/→、Home/End、PageUp/PageDown 按整档移动并自动提交；用目录对象上的世代计数器丢弃迟到的响应；数据全部取自官方 ctx.modelDirectories，不新增任何能力。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "preview": "node preview/build-preview.mjs && node preview/serve.mjs",
+    "publish": "node tools/publish.mjs"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LihiHe/dsh-thinking-slider.git"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ]
+    }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "reasoning-effort",
+    "thinking",
+    "slider",
+    "composer"
+  ]
+}

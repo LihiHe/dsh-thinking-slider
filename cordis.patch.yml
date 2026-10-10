@@ -1,0 +1,9 @@
+# dsh-thinking-slider bundle patch —— 只插入一个宿主插件行：宿主半边不注册任何
+# 服务、不写会话、不开路由，纯占位（全部功能在浏览器半边 lib/client.js，靠
+# package.json 的 `dsh.client` 声明被 web app 装载）。
+# 选中某个推理等级这件事由浏览器半边直接调官方客户端服务
+# `ctx.modelDirectories` + `sessions.selectModel()` 完成，与官方模型菜单走同一条
+# 路径，因此没有任何宿主侧状态需要维护。
+- insert:
+    - id: dsh-thinking-slider
+      name: dsh-thinking-slider

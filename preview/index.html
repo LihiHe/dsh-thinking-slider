@@ -1,0 +1,1037 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>dsh-thinking-slider · 素材化预览</title>
+<style>
+/* ---- DSH 主题令牌：取自 @deepseek-ai/dsh-client-ui-theme 的真实取值 ---- */
+:root, [data-theme="light"] {
+  --dsw-alias-bg-base: #fff;
+  --dsw-alias-bg-layer-1: #fff;
+  --dsw-alias-bg-layer-2: #fff;
+  --dsw-alias-label-primary: #0f1115;
+  --dsw-alias-label-secondary: #cfd3d6;
+  --dsw-alias-label-tertiary: #adb2b8;
+  --dsw-alias-label-caption: #adb2b8;
+  --dsw-alias-label-dimmed: #e1e5ee;
+  --dsw-alias-border-l2: #0000001a;
+  --dsw-alias-interactive-bg-hover: #2631480f;
+  --dsw-alias-interactive-bg-active: #2631481a;
+  --dsw-alias-state-business-primary: #3078f0;
+  --dsw-alias-state-error-primary: #ec1313;
+  --dsw-menu-surface-fill: #f8f9fa94;
+  --dsw-menu-backdrop-filter: blur(40px) saturate(150%);
+  --dsw-radius-lg: 16px;
+  --dsw-radius-md: 12px;
+  --pv-page-bg: #f2f4f7;
+  --pv-card-bg: #fff;
+  --pv-composer-bg: #fff;
+  --pv-composer-border: #00000014;
+  --pv-note: #666a70;
+}
+[data-theme="dark"] {
+  --dsw-alias-bg-base: #151517;
+  --dsw-alias-bg-layer-1: #232324;
+  --dsw-alias-bg-layer-2: #2c2c2e;
+  --dsw-alias-label-primary: #f9fafb;
+  --dsw-alias-label-secondary: #61666b;
+  --dsw-alias-label-tertiary: #81858c;
+  --dsw-alias-label-caption: #81858c;
+  --dsw-alias-label-dimmed: #43454a;
+  --dsw-alias-border-l2: #ffffff1f;
+  --dsw-alias-interactive-bg-hover: #ffffff14;
+  --dsw-alias-interactive-bg-active: #ffffff24;
+  --dsw-alias-state-business-primary: #3b82f6;
+  --dsw-alias-state-error-primary: #f25a5a;
+  --dsw-menu-surface-fill: #43454a73;
+  --pv-page-bg: #000;
+  --pv-card-bg: #222;
+  --pv-composer-bg: #16171a;
+  --pv-composer-border: #ffffff1f;
+  --pv-note: #9aa0a6;
+}
+
+/* ---- 插件真实注入的 CSS，逐字复制（RANGE_CSS） ---- */
+/* 把「比例」注册成可补间的数值类型：点击轨道 / 键盘跳档 / 返回默认时，
+   填充、圆钮、刻度点会一起缓动过去；拖动中由 JS 临时把过渡关掉（跟手优先）。
+   —— 「丝滑」就是这两半合起来的手感。 */
+@property --dsh-ts-ratio {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/* 滑轨行：比例过渡挂在这一层，所有子元素共享同一个已补间的值。 */
+.dsh-thinking-slider-rail {
+  transition: --dsh-ts-ratio 320ms cubic-bezier(0.34, 1.28, 0.64, 1), box-shadow 280ms ease;
+}
+
+/* 底色轨道：胖胶囊 + 1px 极淡描边。 */
+.dsh-thinking-slider-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--dsh-ts-rest-color, rgba(128,128,128,0.14));
+  box-shadow: inset 0 0 0 1px var(--dsh-ts-edge, rgba(128,128,128,0.2));
+  pointer-events: none;
+}
+
+/* 填充段：宽度 = 圆钮半径 + ratio * (100% - 2*圆钮半径)，
+   和原生 range 圆钮的行程完全重合 —— 所以填充边界总是压在圆钮中心下面。 */
+.dsh-thinking-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 999px;
+  width: calc(15px + var(--dsh-ts-ratio, 0) * (100% - 30px));
+  background: var(--dsh-ts-fill-color, #3078f0);
+  pointer-events: none;
+  transition: background-color 320ms ease;
+}
+/* 最高档：填充段上叠一层流动的品牌渐变，用 opacity 淡入淡出 —— 进/出最高档
+   是一次 280ms 的过渡，而不是渐变硬闪。 */
+.dsh-thinking-slider-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background-image: linear-gradient(105deg, #0818e0 0%, #4020e8 24%, #a828e8 48%, #c65cf5 62%, #4020e8 82%, #0818e0 100%);
+  background-size: 220% 100%;
+  background-position: 50% 50%;
+  opacity: 0;
+  transition: opacity 280ms ease;
+}
+.dsh-thinking-slider-rail[data-boost] .dsh-thinking-slider-fill::after { opacity: 1; }
+
+/* 刻度点：每档一颗，铺在圆钮的行程上（左右各内缩一个圆钮半径）。
+   两层同样的点：底层灰点，上层「已通过」的浅蓝点，后者被裁到填充宽度。 */
+.dsh-thinking-slider-dots {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
+  pointer-events: none;
+}
+.dsh-thinking-slider-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--dsh-ts-dot-color, rgba(128,128,128,0.42));
+  transition: background-color 240ms ease;
+}
+.dsh-thinking-slider-dots-passed {
+  clip-path: inset(0 calc(100% - (15px + var(--dsh-ts-ratio, 0) * (100% - 30px))) 0 0);
+}
+.dsh-thinking-slider-dots-passed .dsh-thinking-slider-dot {
+  background: var(--dsh-ts-dot-passed-color, rgba(109,181,255,1));
+}
+
+/* 白圆钮：**自己画的**（原生圆钮透明）。位置同样由比例算出来，所以它会跟着
+   填充边界一起缓动；直径比轨道大，上下各溢出 2px —— 素材里那颗钮就是骑在轨道上的。 */
+.dsh-thinking-slider-knob {
+  position: absolute;
+  top: 50%;
+  left: calc(15px + var(--dsh-ts-ratio, 0) * (100% - 30px));
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.22), 0 3px 10px rgba(0,0,0,0.16);
+  pointer-events: none;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease, opacity 160ms ease;
+}
+.dsh-thinking-slider-rail:hover .dsh-thinking-slider-knob { transform: scale(1.06); }
+.dsh-thinking-slider-rail:has(.dsh-thinking-slider-range:active) .dsh-thinking-slider-knob {
+  transform: scale(1.16);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.22), 0 4px 12px rgba(0,0,0,0.2), 0 0 0 7px color-mix(in srgb, var(--dsw-alias-state-business-primary, #3078f0) 14%, transparent);
+}
+/* 提交中：只把圆钮压暗一点点，**不禁用滑轨** —— 禁用会让整行在提交往返里闪一下
+   透明度，那正是「拖到松手时感觉卡一下」的来源之一。 */
+.dsh-thinking-slider-rail:has(.dsh-thinking-slider-range[data-busy="true"]) .dsh-thinking-slider-knob { opacity: 0.72; }
+.dsh-thinking-slider-rail:has(.dsh-thinking-slider-range:disabled) { opacity: 0.55; }
+.dsh-thinking-slider-rail:has(.dsh-thinking-slider-range:disabled) .dsh-thinking-slider-knob { transform: none; }
+.dsh-thinking-slider-rail:has(.dsh-thinking-slider-range:focus-visible) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary, #3078f0) 55%, transparent);
+}
+
+/* 最高档：轨道外一圈亮边 + 外发光（让它在浅色/深色页面上都「烫」起来）。 */
+.dsh-thinking-slider-rail[data-boost] {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-business-primary, #4d6bfe) 45%, transparent), 0 0 12px color-mix(in srgb, var(--dsw-alias-state-business-primary, #4d6bfe) 24%, transparent);
+}
+
+/* 星尘：两半同样的星图首尾相接，整体左移 50% 后正好无缝循环（素材里那些白点）。 */
+.dsh-thinking-slider-stars {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 320ms ease;
+}
+.dsh-thinking-slider-rail[data-boost] .dsh-thinking-slider-stars { opacity: 1; }
+.dsh-thinking-slider-starfield {
+  display: flex;
+  width: 200%;
+  height: 100%;
+  animation: dsh-ts-starfield 3s linear infinite;
+}
+.dsh-thinking-slider-rail[data-boost="fast"] .dsh-thinking-slider-starfield { animation-duration: 1.6s; }
+.dsh-thinking-slider-star-half { position: relative; width: 50%; height: 100%; }
+.dsh-thinking-slider-star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  margin: -1px 0 0 -1px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255,255,255,0.8);
+  animation: dsh-ts-twinkle var(--dsh-ts-star-period, 2.2s) ease-in-out var(--dsh-ts-star-delay, 0s) infinite alternate;
+}
+
+/* 原生 input：轨道与圆钮全部透明，只留命中盒（尺寸与自绘轨道一致）。
+   拖动、点击、键盘因此仍然是浏览器原生行为，视觉却完全由上面几层决定。 */
+.dsh-thinking-slider-range {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  width: 100%;
+  height: 26px;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.dsh-thinking-slider-range:disabled { cursor: default; }
+.dsh-thinking-slider-range::-webkit-slider-runnable-track {
+  height: 26px;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+}
+.dsh-thinking-slider-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  margin-top: -2px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+.dsh-thinking-slider-range::-moz-range-track {
+  height: 26px;
+  border-radius: 999px;
+  background: transparent;
+}
+.dsh-thinking-slider-range::-moz-range-progress { background: transparent; }
+.dsh-thinking-slider-range::-moz-range-thumb {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* 触发 chip：中性 hover / 展开态；最高档时整枚 chip 由 JS 换成紫色。 */
+.dsh-thinking-slider-trigger { transition: color 240ms ease, background-color 200ms ease; }
+.dsh-thinking-slider-trigger:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12)); }
+.dsh-thinking-slider-trigger:active,
+.dsh-thinking-slider-trigger[aria-expanded="true"] { background: var(--dsw-alias-interactive-bg-active, rgba(128,128,128,0.18)); }
+.dsh-thinking-slider-trigger:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #0d0d0d); outline-offset: 1px; }
+
+/* 官方「选择模型 / 推理等级」座位（single 插槽，抢不过来）：
+   本插件已经接管这两件事，所以运行时给它打上这个标记把官方那枚 chip 藏掉。
+   标记只在**我们自己能用同一份目录数据**（目录服务已就绪）且官方座位**没被锁**时
+   才打上去，卸载时撤掉 —— 控件不可用时用户永远还有官方那一扇门。 */
+[data-dsh-thinking-slider-native="hidden"] { display: none !important; }
+
+/* 卡片里的模型行（模型名 ▾）：点开滑条上方的模型清单。 */
+.dsh-thinking-slider-model-row { transition: color 200ms ease, background-color 200ms ease; }
+.dsh-thinking-slider-model-row:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12)); }
+.dsh-thinking-slider-model-row:active,
+.dsh-thinking-slider-model-row[aria-expanded="true"] { background: var(--dsw-alias-interactive-bg-active, rgba(128,128,128,0.18)); }
+.dsh-thinking-slider-model-row:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #0d0d0d); outline-offset: 1px; }
+.dsh-thinking-slider-model-row[aria-expanded="true"] .dsh-thinking-slider-model-chevron { transform: rotate(180deg); }
+
+/* 模型清单的开合过渡（图二「收起」↔ 图一「展开」）。
+   外层 reveal 用 grid-template-rows 的 0fr ↔ 1fr —— 这是少数能把「高度 auto」也
+   做成可过渡的办法，于是**卡片自身的高度跟着一起长/缩**，不是清单「啪」地出现、
+   卡片再跳一下。内层 clip 负责裁切（顺便给清单那 -6px 的横向负 margin 留出位置，
+   否则细滚动条会被裁掉半边）。清单本体再淡入 + 轻微下移。
+   注意清单是**常驻 DOM**的（不是展开才挂载）：收起时若节点直接消失，内容会在
+   1 帧内先没了、空出来的高度再慢慢收，看着像被「抽走」；常驻才能让淡出与收缩
+   同步。收起态用 aria-hidden + 每行 tabIndex -1 挡住读屏与 Tab。 */
+.dsh-thinking-slider-models-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-bottom 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dsh-thinking-slider-models-reveal[data-open="true"] { grid-template-rows: 1fr; }
+/* 卡片内容列是 gap: 10px：reveal 夹在卡头与滑轨之间，收起时它会白吃一条 gap
+   （卡片比改动前高 10px、多出一条空带）。抵掉一个，卡片高度与以前逐像素一致；
+   展开时清单本来就要吃两个 gap，所以是 0。margin 一起过渡，开合才不跳。 */
+.dsh-thinking-slider-models-reveal[data-open="false"] { margin-bottom: -10px; }
+.dsh-thinking-slider-models-clip {
+  min-height: 0;
+  overflow: hidden;
+  /* 让出清单 margin: 0 -6px 的那 6px：横向不能裁，纵向要裁。 */
+  margin: 0 -6px;
+  padding: 0 6px;
+}
+.dsh-thinking-slider-models {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 170ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  scrollbar-width: thin;
+}
+.dsh-thinking-slider-models-reveal[data-open="true"] .dsh-thinking-slider-models { opacity: 1; transform: none; }
+.dsh-thinking-slider-model-item { transition: background-color 180ms ease, color 180ms ease; }
+.dsh-thinking-slider-model-item:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12)); }
+.dsh-thinking-slider-model-item:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #0d0d0d); outline-offset: -2px; }
+.dsh-thinking-slider-model-item[aria-selected="true"] .dsh-thinking-slider-model-name { color: var(--dsw-alias-label-primary, inherit); }
+
+/* 卡片进场：淡入 + 轻微上浮。 */
+.dsh-thinking-slider-card { animation: dsh-ts-card-in 180ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* 档位名切换：淡入 + 上浮（React 侧给 key，动画因此每次换档都会重播）。 */
+.dsh-thinking-slider-level { animation: dsh-ts-level-in 200ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* 「等级名 ›」按钮：hover 时箭头右移一点 —— 素材里那个 `›` 就是「下一档」的暗示。 */
+.dsh-thinking-slider-advance { transition: color 200ms ease, background-color 200ms ease; }
+.dsh-thinking-slider-advance:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12)); }
+.dsh-thinking-slider-advance:hover .dsh-thinking-slider-chevron { transform: translateX(2px); }
+.dsh-thinking-slider-advance:disabled { cursor: default; opacity: 0.75; }
+.dsh-thinking-slider-advance:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #0d0d0d); outline-offset: 1px; }
+
+/* 重置 ↻：按下时转半圈，hover 时变亮并出现一枚中性底。 */
+.dsh-thinking-slider-reset:hover { color: var(--dsw-alias-label-primary, inherit); background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12)); }
+.dsh-thinking-slider-reset:active .dsh-thinking-slider-reset-glyph { transform: rotate(-180deg); }
+.dsh-thinking-slider-reset-glyph { transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1); }
+.dsh-thinking-slider-reset:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #0d0d0d); outline-offset: 1px; }
+
+/* 最高档的「流动」：填充段上那层渐变缓慢左右移动（最高档 6s、Ultra 4s）。 */
+.dsh-thinking-slider-rail[data-boost] .dsh-thinking-slider-fill::after { animation: dsh-ts-effort-flow 6s ease-in-out infinite alternate; }
+.dsh-thinking-slider-rail[data-boost="fast"] .dsh-thinking-slider-fill::after { animation-duration: 4s; }
+
+@keyframes dsh-ts-card-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes dsh-ts-level-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes dsh-ts-effort-flow {
+  from { background-position: 0% 50%; }
+  to { background-position: 100% 50%; }
+}
+@keyframes dsh-ts-starfield {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+@keyframes dsh-ts-twinkle {
+  from { opacity: 0.25; transform: scale(calc(var(--dsh-ts-star-scale, 1) * 0.55)); }
+  to { opacity: 1; transform: scale(var(--dsh-ts-star-scale, 1)); }
+}
+
+/* 系统级「减弱动态效果」：动效全部关掉，控件仍然完全可用。 */
+@media (prefers-reduced-motion: reduce) {
+  .dsh-thinking-slider-rail,
+  .dsh-thinking-slider-fill,
+  .dsh-thinking-slider-fill::after,
+  .dsh-thinking-slider-knob,
+  .dsh-thinking-slider-star,
+  .dsh-thinking-slider-starfield,
+  .dsh-thinking-slider-card,
+  .dsh-thinking-slider-models-reveal,
+  .dsh-thinking-slider-models-clip,
+  .dsh-thinking-slider-models,
+  .dsh-thinking-slider-level,
+  .dsh-thinking-slider-range {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---- 预览页自己的排版糖，不属于插件 ---- */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 16px 14px 40px;
+  background: var(--pv-page-bg);
+  color: var(--dsw-alias-label-primary);
+  font: 15px/1.5 -apple-system, "PingFang SC", "Source Han Sans SC", system-ui, sans-serif;
+}
+.pv-head { max-width: 1180px; margin: 0 auto 18px; }
+.pv-head h1 { margin: 0 0 6px; font-size: 20px; }
+.pv-head p { margin: 0 0 6px; font-size: 13px; color: var(--pv-note); }
+.pv-head code { font-size: 12px; }
+.pv-switch { display: flex; gap: 8px; margin: 12px 0 4px; }
+.pv-switch button {
+  padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  color: var(--dsw-alias-label-primary); background: var(--pv-composer-bg);
+  border: 1px solid var(--pv-composer-border); border-radius: 8px;
+}
+.pv-switch button[aria-pressed="true"] { border-color: var(--dsw-alias-state-business-primary); }
+.pv-grid { max-width: 1180px; margin: 0 auto; display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.pv-scene-title { margin: 0 0 2px; font-size: 14px; }
+.pv-scene-note { margin: 0 0 10px; font-size: 12px; line-height: 1.45; color: var(--pv-note); min-height: 34px; }
+.pv-composer { position: relative; }
+.pv-input {
+  display: flex; align-items: center; gap: 8px; justify-content: flex-end;
+  min-height: 46px; padding: 6px 8px 6px 14px;
+  background: var(--pv-composer-bg);
+  border: 1px solid var(--pv-composer-border);
+  border-radius: var(--dsw-radius-lg);
+}
+.pv-input-placeholder { margin-right: auto; font-size: 14px; color: var(--dsw-alias-label-tertiary); }
+.pv-cardwrap { margin-bottom: 8px; }
+/* 官方 MenuSurface 的材质等价物（测试替身渲染成普通 div，这里把材质补回去）。 */
+[data-primitive="MenuSurface"] {
+  background: var(--dsw-menu-surface-fill);
+  -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  border-radius: var(--dsw-radius-lg);
+  overflow: hidden;
+}
+/* 素材里的卡片是纯深灰底；深色主题下用 --pv-card-bg 压掉材质半透明，方便对照素材。 */
+[data-theme="dark"] [data-primitive="MenuSurface"] { background: var(--pv-card-bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.pv-facts { max-width: 1180px; margin: 26px auto 0; font-size: 13px; }
+.pv-facts table { width: 100%; border-collapse: collapse; }
+.pv-facts th, .pv-facts td { padding: 5px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--pv-composer-border); }
+.pv-facts th { width: 116px; font-weight: 500; color: var(--pv-note); }
+details { max-width: 1180px; margin: 18px auto 0; font-size: 12px; }
+pre { overflow: auto; padding: 10px; background: var(--pv-composer-bg); border-radius: 12px; border: 1px solid var(--pv-composer-border); }
+</style>
+</head>
+<body>
+<header class="pv-head">
+  <h1>dsh-thinking-slider · 素材化预览</h1>
+  <p>每一处外观都来自插件**真实渲染出的元素树**（测试替身 React 渲染 → 序列化成 HTML），滑轨 CSS 是插件注入页面的那一份逐字复制；只有官方 <code>MenuSurface</code> 的材质外壳用了一条等价 CSS 还原。<strong>这不是运行时截图</strong>，是同一份代码的离线渲染，用来在没有 devtools 的 WebView 里核对视觉。</p>
+  <p>真实位置：DSH Web GUI 输入框右侧 <code>conversation.input.right</code>（order 45）；官方那个 <code>DeepSeek-V4.1-Flash · High</code> 座位是 <strong>single</strong> 插槽抢不过来，所以插件在运行时给它打标记隐掉，把「选模型」并进这枚 chip 与它的卡片里 —— 下面是接管后的样子（官方座位已不在画面中）。</p>
+  <p><strong>可以直接拖下面的滑轨</strong>：这一页内嵌了一段与被改组件 <code>onInput</code>/<code>onRelease</code> 等价的脚本 —— 拖动时蓝填充与圆钮跟手、跨档时档位名淡入、进最高档时渐变 280ms 淡入并流动、星尘按档位重建、松手吸附到最近的档位、点卡头那行模型名还能把模型清单展开 / 收起（高度 300ms 过渡）。</p>
+  <div class="pv-switch" role="group" aria-label="主题">
+    <button type="button" data-pv-theme="light" aria-pressed="false">浅色</button>
+    <button type="button" data-pv-theme="dark" aria-pressed="true">深色（对照素材）</button>
+  </div>
+</header>
+
+<div class="pv-grid">
+<section class="pv-scene">
+  <h3 class="pv-scene-title">① 轻度（最低档）</h3>
+  <p class="pv-scene-note">圆钮在最左，六颗刻度点全是灰的；填充起点就是 0 —— 圆钮靠 CSS 的 `calc` 端点内缩压在轨道上。</p>
+  <div class="pv-composer" data-scene="0">
+    <div class="pv-cardwrap"><div style="position:fixed;z-index:1200;width:min(300px, calc(100vw - 24px));padding:12px 14px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);left:12px;top:12px" role="group" aria-label="推理强度" data-primitive="MenuSurface"><div class="dsh-thinking-slider-card-inner" style="display:flex;flex-direction:column;gap:10px"><div style="display:grid;grid-template-columns:28px 1fr 28px;align-items:center;gap:6px"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:color 240ms ease, filter 240ms ease;filter:none" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg></span><div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0"><button type="button" class="dsh-thinking-slider-advance" style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer;max-width:100%;min-width:0" aria-label="调到下一档"><span class="dsh-thinking-slider-level" style="margin:0;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:13px;font-weight:600;line-height:18px;white-space:nowrap;transition:color 240ms ease">轻度</span><span class="dsh-thinking-slider-chevron" style="color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:13px;line-height:18px;transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)" aria-hidden="true">›</span></button><button type="button" class="dsh-thinking-slider-model-row" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;max-width:100%;padding:2px 8px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer" aria-haspopup="listbox" aria-expanded="false" aria-label="选择模型"><span style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><button type="button" class="dsh-thinking-slider-reset" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary, #8a8a8a);cursor:pointer;transition:color 200ms ease, background-color 200ms ease" aria-label="返回默认"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" class="dsh-thinking-slider-reset-glyph" style="display:block"><path d="M21 12a9 9 0 1 1-2.64-6.36"><path d="M21 4v5h-5"></svg></button></div><div class="dsh-thinking-slider-models-reveal" data-open="false" aria-hidden="true"><div class="dsh-thinking-slider-models-clip"><div class="dsh-thinking-slider-models" style="display:flex;flex-direction:column;gap:1px;max-height:168px;overflow-y:auto;margin:0 -6px;padding:2px 6px;border-radius:10px" role="listbox" aria-label="选择模型"><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">账户</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="true"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true">✓</span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Pro</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1（无推理档位）</span></button><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Anthropic</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Opus 4</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="登录已过期，请重新授权"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">OpenAI</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="无法连接"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Google</span></button></div></div></div><div class="dsh-thinking-slider-rail" style="position:relative;width:100%;height:26px;border-radius:999px;overflow:visible;--dsh-ts-ratio:0;--dsh-ts-fill-color:var(--dsw-alias-state-business-primary, #3078f0);--dsh-ts-rest-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 14%, transparent);--dsh-ts-edge:color-mix(in srgb, var(--dsw-alias-border-l2, rgba(128,128,128,0.28)) 70%, transparent);--dsh-ts-dot-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 42%, transparent);--dsh-ts-dot-passed-color:color-mix(in srgb, var(--dsw-alias-state-business-primary, #3078f0) 55%, #fff)"><div class="dsh-thinking-slider-track" aria-hidden="true"></div><div class="dsh-thinking-slider-fill" aria-hidden="true"></div><div class="dsh-thinking-slider-dots" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-dots dsh-thinking-slider-dots-passed" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-knob" aria-hidden="true"></div><input type="range" class="dsh-thinking-slider-range" min="0" max="5" step="0.01" value="0" aria-label="推理强度" aria-valuetext="轻度"></div></div></div></div>
+    <div class="pv-input">
+      <span class="pv-input-placeholder">给智能体发消息</span>
+      <button type="button" class="dsh-thinking-slider-trigger" style="display:inline-flex;align-items:center;gap:4px;height:28px;max-width:min(240px, 45cqw);padding:0 6px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:20px;cursor:pointer;white-space:nowrap" aria-label="推理强度：DeepSeek-V4.1-Flash · 轻度" aria-haspopup="dialog" aria-expanded="true" aria-busy="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg><span class="dsh-thinking-slider-trigger-model" style="flex-shrink:1000;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666)">DeepSeek-V4.1-Flash</span><span style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)" aria-hidden="true">·</span><span class="dsh-thinking-slider-trigger-level" style="flex:none;white-space:nowrap;color:var(--dsw-alias-label-caption, #999)">轻度</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
+</section>
+<section class="pv-scene">
+  <h3 class="pv-scene-title">② 中</h3>
+  <p class="pv-scene-note">已填充段是素材那颗饱和蓝，被填充盖住的那颗刻度点自动变浅蓝（`clip-path` 裁一层亮点）。</p>
+  <div class="pv-composer" data-scene="1">
+    <div class="pv-cardwrap"><div style="position:fixed;z-index:1200;width:min(300px, calc(100vw - 24px));padding:12px 14px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);left:12px;top:12px" role="group" aria-label="推理强度" data-primitive="MenuSurface"><div class="dsh-thinking-slider-card-inner" style="display:flex;flex-direction:column;gap:10px"><div style="display:grid;grid-template-columns:28px 1fr 28px;align-items:center;gap:6px"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:color 240ms ease, filter 240ms ease;filter:none" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg></span><div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0"><button type="button" class="dsh-thinking-slider-advance" style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer;max-width:100%;min-width:0" aria-label="调到下一档"><span class="dsh-thinking-slider-level" style="margin:0;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:13px;font-weight:600;line-height:18px;white-space:nowrap;transition:color 240ms ease">中</span><span class="dsh-thinking-slider-chevron" style="color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:13px;line-height:18px;transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)" aria-hidden="true">›</span></button><button type="button" class="dsh-thinking-slider-model-row" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;max-width:100%;padding:2px 8px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer" aria-haspopup="listbox" aria-expanded="false" aria-label="选择模型"><span style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><span style="display:block;width:28px" aria-hidden="true"></span></div><div class="dsh-thinking-slider-models-reveal" data-open="false" aria-hidden="true"><div class="dsh-thinking-slider-models-clip"><div class="dsh-thinking-slider-models" style="display:flex;flex-direction:column;gap:1px;max-height:168px;overflow-y:auto;margin:0 -6px;padding:2px 6px;border-radius:10px" role="listbox" aria-label="选择模型"><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">账户</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="true"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true">✓</span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Pro</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1（无推理档位）</span></button><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Anthropic</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Opus 4</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="登录已过期，请重新授权"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">OpenAI</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="无法连接"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Google</span></button></div></div></div><div class="dsh-thinking-slider-rail" style="position:relative;width:100%;height:26px;border-radius:999px;overflow:visible;--dsh-ts-ratio:0.2;--dsh-ts-fill-color:var(--dsw-alias-state-business-primary, #3078f0);--dsh-ts-rest-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 14%, transparent);--dsh-ts-edge:color-mix(in srgb, var(--dsw-alias-border-l2, rgba(128,128,128,0.28)) 70%, transparent);--dsh-ts-dot-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 42%, transparent);--dsh-ts-dot-passed-color:color-mix(in srgb, var(--dsw-alias-state-business-primary, #3078f0) 55%, #fff)"><div class="dsh-thinking-slider-track" aria-hidden="true"></div><div class="dsh-thinking-slider-fill" aria-hidden="true"></div><div class="dsh-thinking-slider-dots" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-dots dsh-thinking-slider-dots-passed" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-knob" aria-hidden="true"></div><input type="range" class="dsh-thinking-slider-range" min="0" max="5" step="0.01" value="1" aria-label="推理强度" aria-valuetext="中"></div></div></div></div>
+    <div class="pv-input">
+      <span class="pv-input-placeholder">给智能体发消息</span>
+      <button type="button" class="dsh-thinking-slider-trigger" style="display:inline-flex;align-items:center;gap:4px;height:28px;max-width:min(240px, 45cqw);padding:0 6px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:20px;cursor:pointer;white-space:nowrap" aria-label="推理强度：DeepSeek-V4.1-Flash · 中" aria-haspopup="dialog" aria-expanded="true" aria-busy="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg><span class="dsh-thinking-slider-trigger-model" style="flex-shrink:1000;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666)">DeepSeek-V4.1-Flash</span><span style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)" aria-hidden="true">·</span><span class="dsh-thinking-slider-trigger-level" style="flex:none;white-space:nowrap;color:var(--dsw-alias-label-caption, #999)">中</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
+</section>
+<section class="pv-scene">
+  <h3 class="pv-scene-title">③ 高</h3>
+  <p class="pv-scene-note">档位由四舍五入决定：连续位置落在这一格就是「高」。</p>
+  <div class="pv-composer" data-scene="2">
+    <div class="pv-cardwrap"><div style="position:fixed;z-index:1200;width:min(300px, calc(100vw - 24px));padding:12px 14px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);left:12px;top:12px" role="group" aria-label="推理强度" data-primitive="MenuSurface"><div class="dsh-thinking-slider-card-inner" style="display:flex;flex-direction:column;gap:10px"><div style="display:grid;grid-template-columns:28px 1fr 28px;align-items:center;gap:6px"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:color 240ms ease, filter 240ms ease;filter:none" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg></span><div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0"><button type="button" class="dsh-thinking-slider-advance" style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer;max-width:100%;min-width:0" aria-label="调到下一档"><span class="dsh-thinking-slider-level" style="margin:0;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:13px;font-weight:600;line-height:18px;white-space:nowrap;transition:color 240ms ease">高</span><span class="dsh-thinking-slider-chevron" style="color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:13px;line-height:18px;transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)" aria-hidden="true">›</span></button><button type="button" class="dsh-thinking-slider-model-row" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;max-width:100%;padding:2px 8px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer" aria-haspopup="listbox" aria-expanded="false" aria-label="选择模型"><span style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><button type="button" class="dsh-thinking-slider-reset" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary, #8a8a8a);cursor:pointer;transition:color 200ms ease, background-color 200ms ease" aria-label="返回默认"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" class="dsh-thinking-slider-reset-glyph" style="display:block"><path d="M21 12a9 9 0 1 1-2.64-6.36"><path d="M21 4v5h-5"></svg></button></div><div class="dsh-thinking-slider-models-reveal" data-open="false" aria-hidden="true"><div class="dsh-thinking-slider-models-clip"><div class="dsh-thinking-slider-models" style="display:flex;flex-direction:column;gap:1px;max-height:168px;overflow-y:auto;margin:0 -6px;padding:2px 6px;border-radius:10px" role="listbox" aria-label="选择模型"><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">账户</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="true"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true">✓</span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Pro</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1（无推理档位）</span></button><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Anthropic</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Opus 4</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="登录已过期，请重新授权"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">OpenAI</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="无法连接"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Google</span></button></div></div></div><div class="dsh-thinking-slider-rail" style="position:relative;width:100%;height:26px;border-radius:999px;overflow:visible;--dsh-ts-ratio:0.4;--dsh-ts-fill-color:var(--dsw-alias-state-business-primary, #3078f0);--dsh-ts-rest-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 14%, transparent);--dsh-ts-edge:color-mix(in srgb, var(--dsw-alias-border-l2, rgba(128,128,128,0.28)) 70%, transparent);--dsh-ts-dot-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 42%, transparent);--dsh-ts-dot-passed-color:color-mix(in srgb, var(--dsw-alias-state-business-primary, #3078f0) 55%, #fff)"><div class="dsh-thinking-slider-track" aria-hidden="true"></div><div class="dsh-thinking-slider-fill" aria-hidden="true"></div><div class="dsh-thinking-slider-dots" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-dots dsh-thinking-slider-dots-passed" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-knob" aria-hidden="true"></div><input type="range" class="dsh-thinking-slider-range" min="0" max="5" step="0.01" value="2" aria-label="推理强度" aria-valuetext="高"></div></div></div></div>
+    <div class="pv-input">
+      <span class="pv-input-placeholder">给智能体发消息</span>
+      <button type="button" class="dsh-thinking-slider-trigger" style="display:inline-flex;align-items:center;gap:4px;height:28px;max-width:min(240px, 45cqw);padding:0 6px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:20px;cursor:pointer;white-space:nowrap" aria-label="推理强度：DeepSeek-V4.1-Flash · 高" aria-haspopup="dialog" aria-expanded="true" aria-busy="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg><span class="dsh-thinking-slider-trigger-model" style="flex-shrink:1000;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666)">DeepSeek-V4.1-Flash</span><span style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)" aria-hidden="true">·</span><span class="dsh-thinking-slider-trigger-level" style="flex:none;white-space:nowrap;color:var(--dsw-alias-label-caption, #999)">高</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
+</section>
+<section class="pv-scene">
+  <h3 class="pv-scene-title">④ 极高</h3>
+  <p class="pv-scene-note">最高三档之一，但只有 Ultra 走「更快」的流动。</p>
+  <div class="pv-composer" data-scene="3">
+    <div class="pv-cardwrap"><div style="position:fixed;z-index:1200;width:min(300px, calc(100vw - 24px));padding:12px 14px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);left:12px;top:12px" role="group" aria-label="推理强度" data-primitive="MenuSurface"><div class="dsh-thinking-slider-card-inner" style="display:flex;flex-direction:column;gap:10px"><div style="display:grid;grid-template-columns:28px 1fr 28px;align-items:center;gap:6px"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;color:#a050f0;transition:color 240ms ease, filter 240ms ease;filter:drop-shadow(0 0 6px #a050f0)" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg></span><div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0"><button type="button" class="dsh-thinking-slider-advance" style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer;max-width:100%;min-width:0" aria-label="调到下一档"><span class="dsh-thinking-slider-level" style="margin:0;color:#a050f0;font-size:13px;font-weight:600;line-height:18px;white-space:nowrap;transition:color 240ms ease">极高</span><span class="dsh-thinking-slider-chevron" style="color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:13px;line-height:18px;transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)" aria-hidden="true">›</span></button><button type="button" class="dsh-thinking-slider-model-row" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;max-width:100%;padding:2px 8px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer" aria-haspopup="listbox" aria-expanded="false" aria-label="选择模型"><span style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><button type="button" class="dsh-thinking-slider-reset" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary, #8a8a8a);cursor:pointer;transition:color 200ms ease, background-color 200ms ease" aria-label="返回默认"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" class="dsh-thinking-slider-reset-glyph" style="display:block"><path d="M21 12a9 9 0 1 1-2.64-6.36"><path d="M21 4v5h-5"></svg></button></div><div class="dsh-thinking-slider-models-reveal" data-open="false" aria-hidden="true"><div class="dsh-thinking-slider-models-clip"><div class="dsh-thinking-slider-models" style="display:flex;flex-direction:column;gap:1px;max-height:168px;overflow-y:auto;margin:0 -6px;padding:2px 6px;border-radius:10px" role="listbox" aria-label="选择模型"><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">账户</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="true"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true">✓</span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Pro</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1（无推理档位）</span></button><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Anthropic</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Opus 4</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="登录已过期，请重新授权"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">OpenAI</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="无法连接"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Google</span></button></div></div></div><div class="dsh-thinking-slider-rail" style="position:relative;width:100%;height:26px;border-radius:999px;overflow:visible;--dsh-ts-ratio:0.6;--dsh-ts-fill-color:var(--dsw-alias-state-business-primary, #3078f0);--dsh-ts-rest-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 14%, transparent);--dsh-ts-edge:color-mix(in srgb, var(--dsw-alias-border-l2, rgba(128,128,128,0.28)) 70%, transparent);--dsh-ts-dot-color:rgba(255,255,255,0.5);--dsh-ts-dot-passed-color:rgba(255,255,255,0.92)" data-boost="true"><div class="dsh-thinking-slider-track" aria-hidden="true"></div><div class="dsh-thinking-slider-fill" aria-hidden="true"></div><div class="dsh-thinking-slider-dots" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-dots dsh-thinking-slider-dots-passed" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-stars" aria-hidden="true"><div class="dsh-thinking-slider-starfield"><div class="dsh-thinking-slider-star-half"><i class="dsh-thinking-slider-star" style="left:72.09%;top:26.14%;--dsh-ts-star-scale:0.99;--dsh-ts-star-delay:-2.15s;--dsh-ts-star-period:1.99s"></i><i class="dsh-thinking-slider-star" style="left:55.92%;top:42.4%;--dsh-ts-star-scale:0.86;--dsh-ts-star-delay:-1.4s;--dsh-ts-star-period:1.93s"></i><i class="dsh-thinking-slider-star" style="left:45.84%;top:40.77%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.09s;--dsh-ts-star-period:2.77s"></i><i class="dsh-thinking-slider-star" style="left:29.06%;top:74.68%;--dsh-ts-star-scale:1.2;--dsh-ts-star-delay:-0.28s;--dsh-ts-star-period:2.04s"></i><i class="dsh-thinking-slider-star" style="left:79.76%;top:52.12%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.69s;--dsh-ts-star-period:2.03s"></i><i class="dsh-thinking-slider-star" style="left:73.26%;top:53.85%;--dsh-ts-star-scale:1.27;--dsh-ts-star-delay:-2.53s;--dsh-ts-star-period:2.62s"></i><i class="dsh-thinking-slider-star" style="left:50.35%;top:53.73%;--dsh-ts-star-scale:0.68;--dsh-ts-star-delay:-1.11s;--dsh-ts-star-period:2.92s"></i><i class="dsh-thinking-slider-star" style="left:52.16%;top:54.19%;--dsh-ts-star-scale:1.44;--dsh-ts-star-delay:-0.01s;--dsh-ts-star-period:2.61s"></i><i class="dsh-thinking-slider-star" style="left:52%;top:53.82%;--dsh-ts-star-scale:0.61;--dsh-ts-star-delay:-1.3s;--dsh-ts-star-period:2.97s"></i><i class="dsh-thinking-slider-star" style="left:5.83%;top:43.15%;--dsh-ts-star-scale:0.85;--dsh-ts-star-delay:-1.5s;--dsh-ts-star-period:2.85s"></i><i class="dsh-thinking-slider-star" style="left:58.5%;top:73.29%;--dsh-ts-star-scale:1.33;--dsh-ts-star-delay:-1.92s;--dsh-ts-star-period:2.43s"></i><i class="dsh-thinking-slider-star" style="left:60.22%;top:67.48%;--dsh-ts-star-scale:1.21;--dsh-ts-star-delay:-1.64s;--dsh-ts-star-period:2.91s"></i></div><div class="dsh-thinking-slider-star-half"><i class="dsh-thinking-slider-star" style="left:72.09%;top:26.14%;--dsh-ts-star-scale:0.99;--dsh-ts-star-delay:-2.15s;--dsh-ts-star-period:1.99s"></i><i class="dsh-thinking-slider-star" style="left:55.92%;top:42.4%;--dsh-ts-star-scale:0.86;--dsh-ts-star-delay:-1.4s;--dsh-ts-star-period:1.93s"></i><i class="dsh-thinking-slider-star" style="left:45.84%;top:40.77%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.09s;--dsh-ts-star-period:2.77s"></i><i class="dsh-thinking-slider-star" style="left:29.06%;top:74.68%;--dsh-ts-star-scale:1.2;--dsh-ts-star-delay:-0.28s;--dsh-ts-star-period:2.04s"></i><i class="dsh-thinking-slider-star" style="left:79.76%;top:52.12%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.69s;--dsh-ts-star-period:2.03s"></i><i class="dsh-thinking-slider-star" style="left:73.26%;top:53.85%;--dsh-ts-star-scale:1.27;--dsh-ts-star-delay:-2.53s;--dsh-ts-star-period:2.62s"></i><i class="dsh-thinking-slider-star" style="left:50.35%;top:53.73%;--dsh-ts-star-scale:0.68;--dsh-ts-star-delay:-1.11s;--dsh-ts-star-period:2.92s"></i><i class="dsh-thinking-slider-star" style="left:52.16%;top:54.19%;--dsh-ts-star-scale:1.44;--dsh-ts-star-delay:-0.01s;--dsh-ts-star-period:2.61s"></i><i class="dsh-thinking-slider-star" style="left:52%;top:53.82%;--dsh-ts-star-scale:0.61;--dsh-ts-star-delay:-1.3s;--dsh-ts-star-period:2.97s"></i><i class="dsh-thinking-slider-star" style="left:5.83%;top:43.15%;--dsh-ts-star-scale:0.85;--dsh-ts-star-delay:-1.5s;--dsh-ts-star-period:2.85s"></i><i class="dsh-thinking-slider-star" style="left:58.5%;top:73.29%;--dsh-ts-star-scale:1.33;--dsh-ts-star-delay:-1.92s;--dsh-ts-star-period:2.43s"></i><i class="dsh-thinking-slider-star" style="left:60.22%;top:67.48%;--dsh-ts-star-scale:1.21;--dsh-ts-star-delay:-1.64s;--dsh-ts-star-period:2.91s"></i></div></div></div><div class="dsh-thinking-slider-knob" aria-hidden="true"></div><input type="range" class="dsh-thinking-slider-range" min="0" max="5" step="0.01" value="3" aria-label="推理强度" aria-valuetext="极高"></div></div></div></div>
+    <div class="pv-input">
+      <span class="pv-input-placeholder">给智能体发消息</span>
+      <button type="button" class="dsh-thinking-slider-trigger" style="display:inline-flex;align-items:center;gap:4px;height:28px;max-width:min(240px, 45cqw);padding:0 6px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:20px;cursor:pointer;white-space:nowrap" aria-label="推理强度：DeepSeek-V4.1-Flash · 极高" aria-haspopup="dialog" aria-expanded="true" aria-busy="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg><span class="dsh-thinking-slider-trigger-model" style="flex-shrink:1000;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666)">DeepSeek-V4.1-Flash</span><span style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)" aria-hidden="true">·</span><span class="dsh-thinking-slider-trigger-level" style="flex:none;white-space:nowrap;color:var(--dsw-alias-label-caption, #999)">极高</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
+</section>
+<section class="pv-scene">
+  <h3 class="pv-scene-title">⑤ 最高</h3>
+  <p class="pv-scene-note">整条轨道换成蓝→靛→洋紫渐变并在 6s 内往复流动，轨道上漂白色星尘（12 颗）。</p>
+  <div class="pv-composer" data-scene="4">
+    <div class="pv-cardwrap"><div style="position:fixed;z-index:1200;width:min(300px, calc(100vw - 24px));padding:12px 14px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);left:12px;top:12px" role="group" aria-label="推理强度" data-primitive="MenuSurface"><div class="dsh-thinking-slider-card-inner" style="display:flex;flex-direction:column;gap:10px"><div style="display:grid;grid-template-columns:28px 1fr 28px;align-items:center;gap:6px"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;color:#a050f0;transition:color 240ms ease, filter 240ms ease;filter:drop-shadow(0 0 6px #a050f0)" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg></span><div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0"><button type="button" class="dsh-thinking-slider-advance" style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer;max-width:100%;min-width:0" aria-label="调到下一档"><span class="dsh-thinking-slider-level" style="margin:0;color:#a050f0;font-size:13px;font-weight:600;line-height:18px;white-space:nowrap;transition:color 240ms ease">最高</span><span class="dsh-thinking-slider-chevron" style="color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:13px;line-height:18px;transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)" aria-hidden="true">›</span></button><button type="button" class="dsh-thinking-slider-model-row" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;max-width:100%;padding:2px 8px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer" aria-haspopup="listbox" aria-expanded="false" aria-label="选择模型"><span style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><button type="button" class="dsh-thinking-slider-reset" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary, #8a8a8a);cursor:pointer;transition:color 200ms ease, background-color 200ms ease" aria-label="返回默认"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" class="dsh-thinking-slider-reset-glyph" style="display:block"><path d="M21 12a9 9 0 1 1-2.64-6.36"><path d="M21 4v5h-5"></svg></button></div><div class="dsh-thinking-slider-models-reveal" data-open="false" aria-hidden="true"><div class="dsh-thinking-slider-models-clip"><div class="dsh-thinking-slider-models" style="display:flex;flex-direction:column;gap:1px;max-height:168px;overflow-y:auto;margin:0 -6px;padding:2px 6px;border-radius:10px" role="listbox" aria-label="选择模型"><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">账户</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="true"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true">✓</span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Pro</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1（无推理档位）</span></button><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Anthropic</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Opus 4</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="登录已过期，请重新授权"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">OpenAI</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="无法连接"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Google</span></button></div></div></div><div class="dsh-thinking-slider-rail" style="position:relative;width:100%;height:26px;border-radius:999px;overflow:visible;--dsh-ts-ratio:0.8;--dsh-ts-fill-color:var(--dsw-alias-state-business-primary, #3078f0);--dsh-ts-rest-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 14%, transparent);--dsh-ts-edge:color-mix(in srgb, var(--dsw-alias-border-l2, rgba(128,128,128,0.28)) 70%, transparent);--dsh-ts-dot-color:rgba(255,255,255,0.5);--dsh-ts-dot-passed-color:rgba(255,255,255,0.92)" data-boost="true"><div class="dsh-thinking-slider-track" aria-hidden="true"></div><div class="dsh-thinking-slider-fill" aria-hidden="true"></div><div class="dsh-thinking-slider-dots" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-dots dsh-thinking-slider-dots-passed" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-stars" aria-hidden="true"><div class="dsh-thinking-slider-starfield"><div class="dsh-thinking-slider-star-half"><i class="dsh-thinking-slider-star" style="left:72.09%;top:26.14%;--dsh-ts-star-scale:0.99;--dsh-ts-star-delay:-2.15s;--dsh-ts-star-period:1.99s"></i><i class="dsh-thinking-slider-star" style="left:55.92%;top:42.4%;--dsh-ts-star-scale:0.86;--dsh-ts-star-delay:-1.4s;--dsh-ts-star-period:1.93s"></i><i class="dsh-thinking-slider-star" style="left:45.84%;top:40.77%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.09s;--dsh-ts-star-period:2.77s"></i><i class="dsh-thinking-slider-star" style="left:29.06%;top:74.68%;--dsh-ts-star-scale:1.2;--dsh-ts-star-delay:-0.28s;--dsh-ts-star-period:2.04s"></i><i class="dsh-thinking-slider-star" style="left:79.76%;top:52.12%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.69s;--dsh-ts-star-period:2.03s"></i><i class="dsh-thinking-slider-star" style="left:73.26%;top:53.85%;--dsh-ts-star-scale:1.27;--dsh-ts-star-delay:-2.53s;--dsh-ts-star-period:2.62s"></i><i class="dsh-thinking-slider-star" style="left:50.35%;top:53.73%;--dsh-ts-star-scale:0.68;--dsh-ts-star-delay:-1.11s;--dsh-ts-star-period:2.92s"></i><i class="dsh-thinking-slider-star" style="left:52.16%;top:54.19%;--dsh-ts-star-scale:1.44;--dsh-ts-star-delay:-0.01s;--dsh-ts-star-period:2.61s"></i><i class="dsh-thinking-slider-star" style="left:52%;top:53.82%;--dsh-ts-star-scale:0.61;--dsh-ts-star-delay:-1.3s;--dsh-ts-star-period:2.97s"></i><i class="dsh-thinking-slider-star" style="left:5.83%;top:43.15%;--dsh-ts-star-scale:0.85;--dsh-ts-star-delay:-1.5s;--dsh-ts-star-period:2.85s"></i><i class="dsh-thinking-slider-star" style="left:58.5%;top:73.29%;--dsh-ts-star-scale:1.33;--dsh-ts-star-delay:-1.92s;--dsh-ts-star-period:2.43s"></i><i class="dsh-thinking-slider-star" style="left:60.22%;top:67.48%;--dsh-ts-star-scale:1.21;--dsh-ts-star-delay:-1.64s;--dsh-ts-star-period:2.91s"></i></div><div class="dsh-thinking-slider-star-half"><i class="dsh-thinking-slider-star" style="left:72.09%;top:26.14%;--dsh-ts-star-scale:0.99;--dsh-ts-star-delay:-2.15s;--dsh-ts-star-period:1.99s"></i><i class="dsh-thinking-slider-star" style="left:55.92%;top:42.4%;--dsh-ts-star-scale:0.86;--dsh-ts-star-delay:-1.4s;--dsh-ts-star-period:1.93s"></i><i class="dsh-thinking-slider-star" style="left:45.84%;top:40.77%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.09s;--dsh-ts-star-period:2.77s"></i><i class="dsh-thinking-slider-star" style="left:29.06%;top:74.68%;--dsh-ts-star-scale:1.2;--dsh-ts-star-delay:-0.28s;--dsh-ts-star-period:2.04s"></i><i class="dsh-thinking-slider-star" style="left:79.76%;top:52.12%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.69s;--dsh-ts-star-period:2.03s"></i><i class="dsh-thinking-slider-star" style="left:73.26%;top:53.85%;--dsh-ts-star-scale:1.27;--dsh-ts-star-delay:-2.53s;--dsh-ts-star-period:2.62s"></i><i class="dsh-thinking-slider-star" style="left:50.35%;top:53.73%;--dsh-ts-star-scale:0.68;--dsh-ts-star-delay:-1.11s;--dsh-ts-star-period:2.92s"></i><i class="dsh-thinking-slider-star" style="left:52.16%;top:54.19%;--dsh-ts-star-scale:1.44;--dsh-ts-star-delay:-0.01s;--dsh-ts-star-period:2.61s"></i><i class="dsh-thinking-slider-star" style="left:52%;top:53.82%;--dsh-ts-star-scale:0.61;--dsh-ts-star-delay:-1.3s;--dsh-ts-star-period:2.97s"></i><i class="dsh-thinking-slider-star" style="left:5.83%;top:43.15%;--dsh-ts-star-scale:0.85;--dsh-ts-star-delay:-1.5s;--dsh-ts-star-period:2.85s"></i><i class="dsh-thinking-slider-star" style="left:58.5%;top:73.29%;--dsh-ts-star-scale:1.33;--dsh-ts-star-delay:-1.92s;--dsh-ts-star-period:2.43s"></i><i class="dsh-thinking-slider-star" style="left:60.22%;top:67.48%;--dsh-ts-star-scale:1.21;--dsh-ts-star-delay:-1.64s;--dsh-ts-star-period:2.91s"></i></div></div></div><div class="dsh-thinking-slider-knob" aria-hidden="true"></div><input type="range" class="dsh-thinking-slider-range" min="0" max="5" step="0.01" value="4" aria-label="推理强度" aria-valuetext="最高"></div></div></div></div>
+    <div class="pv-input">
+      <span class="pv-input-placeholder">给智能体发消息</span>
+      <button type="button" class="dsh-thinking-slider-trigger" style="display:inline-flex;align-items:center;gap:4px;height:28px;max-width:min(240px, 45cqw);padding:0 6px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:20px;cursor:pointer;white-space:nowrap" aria-label="推理强度：DeepSeek-V4.1-Flash · 最高" aria-haspopup="dialog" aria-expanded="true" aria-busy="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg><span class="dsh-thinking-slider-trigger-model" style="flex-shrink:1000;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666)">DeepSeek-V4.1-Flash</span><span style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)" aria-hidden="true">·</span><span class="dsh-thinking-slider-trigger-level" style="flex:none;white-space:nowrap;color:var(--dsw-alias-label-caption, #999)">最高</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
+</section>
+<section class="pv-scene">
+  <h3 class="pv-scene-title">⑥ Ultra</h3>
+  <p class="pv-scene-note">渐变相位不同（素材里两行 Ultra 就是这条动画的两帧），星尘 22 颗、横穿更快；闪电与等级名一起转紫。</p>
+  <div class="pv-composer" data-scene="5">
+    <div class="pv-cardwrap"><div style="position:fixed;z-index:1200;width:min(300px, calc(100vw - 24px));padding:12px 14px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);left:12px;top:12px" role="group" aria-label="推理强度" data-primitive="MenuSurface"><div class="dsh-thinking-slider-card-inner" style="display:flex;flex-direction:column;gap:10px"><div style="display:grid;grid-template-columns:28px 1fr 28px;align-items:center;gap:6px"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;color:#a050f0;transition:color 240ms ease, filter 240ms ease;filter:drop-shadow(0 0 6px #a050f0)" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg></span><div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0"><button type="button" class="dsh-thinking-slider-advance" style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer;max-width:100%;min-width:0" disabled="" aria-label="调到下一档"><span class="dsh-thinking-slider-level" style="margin:0;color:#a050f0;font-size:13px;font-weight:600;line-height:18px;white-space:nowrap;transition:color 240ms ease">Ultra</span><span class="dsh-thinking-slider-chevron" style="color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:13px;line-height:18px;transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)" aria-hidden="true">›</span></button><button type="button" class="dsh-thinking-slider-model-row" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;max-width:100%;padding:2px 8px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer" aria-haspopup="listbox" aria-expanded="false" aria-label="选择模型"><span style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><button type="button" class="dsh-thinking-slider-reset" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary, #8a8a8a);cursor:pointer;transition:color 200ms ease, background-color 200ms ease" aria-label="返回默认"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" class="dsh-thinking-slider-reset-glyph" style="display:block"><path d="M21 12a9 9 0 1 1-2.64-6.36"><path d="M21 4v5h-5"></svg></button></div><div class="dsh-thinking-slider-models-reveal" data-open="false" aria-hidden="true"><div class="dsh-thinking-slider-models-clip"><div class="dsh-thinking-slider-models" style="display:flex;flex-direction:column;gap:1px;max-height:168px;overflow-y:auto;margin:0 -6px;padding:2px 6px;border-radius:10px" role="listbox" aria-label="选择模型"><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">账户</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="true"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true">✓</span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Pro</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1（无推理档位）</span></button><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Anthropic</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" tab-index="-1" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Opus 4</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="登录已过期，请重新授权"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">OpenAI</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" tab-index="-1" aria-selected="false" title="无法连接"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Google</span></button></div></div></div><div class="dsh-thinking-slider-rail" style="position:relative;width:100%;height:26px;border-radius:999px;overflow:visible;--dsh-ts-ratio:1;--dsh-ts-fill-color:var(--dsw-alias-state-business-primary, #3078f0);--dsh-ts-rest-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 14%, transparent);--dsh-ts-edge:color-mix(in srgb, var(--dsw-alias-border-l2, rgba(128,128,128,0.28)) 70%, transparent);--dsh-ts-dot-color:rgba(255,255,255,0.5);--dsh-ts-dot-passed-color:rgba(255,255,255,0.92)" data-boost="fast"><div class="dsh-thinking-slider-track" aria-hidden="true"></div><div class="dsh-thinking-slider-fill" aria-hidden="true"></div><div class="dsh-thinking-slider-dots" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-dots dsh-thinking-slider-dots-passed" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-stars" aria-hidden="true"><div class="dsh-thinking-slider-starfield"><div class="dsh-thinking-slider-star-half"><i class="dsh-thinking-slider-star" style="left:72.09%;top:26.14%;--dsh-ts-star-scale:0.99;--dsh-ts-star-delay:-1.32s;--dsh-ts-star-period:1.22s"></i><i class="dsh-thinking-slider-star" style="left:55.92%;top:42.4%;--dsh-ts-star-scale:0.86;--dsh-ts-star-delay:-0.86s;--dsh-ts-star-period:1.19s"></i><i class="dsh-thinking-slider-star" style="left:45.84%;top:40.77%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.05s;--dsh-ts-star-period:1.75s"></i><i class="dsh-thinking-slider-star" style="left:29.06%;top:74.68%;--dsh-ts-star-scale:1.2;--dsh-ts-star-delay:-0.17s;--dsh-ts-star-period:1.26s"></i><i class="dsh-thinking-slider-star" style="left:79.76%;top:52.12%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.43s;--dsh-ts-star-period:1.25s"></i><i class="dsh-thinking-slider-star" style="left:73.26%;top:53.85%;--dsh-ts-star-scale:1.27;--dsh-ts-star-delay:-1.56s;--dsh-ts-star-period:1.64s"></i><i class="dsh-thinking-slider-star" style="left:50.35%;top:53.73%;--dsh-ts-star-scale:0.68;--dsh-ts-star-delay:-0.68s;--dsh-ts-star-period:1.85s"></i><i class="dsh-thinking-slider-star" style="left:52.16%;top:54.19%;--dsh-ts-star-scale:1.44;--dsh-ts-star-delay:-0.01s;--dsh-ts-star-period:1.64s"></i><i class="dsh-thinking-slider-star" style="left:52%;top:53.82%;--dsh-ts-star-scale:0.61;--dsh-ts-star-delay:-0.8s;--dsh-ts-star-period:1.88s"></i><i class="dsh-thinking-slider-star" style="left:5.83%;top:43.15%;--dsh-ts-star-scale:0.85;--dsh-ts-star-delay:-0.92s;--dsh-ts-star-period:1.8s"></i><i class="dsh-thinking-slider-star" style="left:58.5%;top:73.29%;--dsh-ts-star-scale:1.33;--dsh-ts-star-delay:-1.18s;--dsh-ts-star-period:1.52s"></i><i class="dsh-thinking-slider-star" style="left:60.22%;top:67.48%;--dsh-ts-star-scale:1.21;--dsh-ts-star-delay:-1.01s;--dsh-ts-star-period:1.84s"></i><i class="dsh-thinking-slider-star" style="left:40.92%;top:33.06%;--dsh-ts-star-scale:0.69;--dsh-ts-star-delay:-0.03s;--dsh-ts-star-period:1.52s"></i><i class="dsh-thinking-slider-star" style="left:82.11%;top:63.88%;--dsh-ts-star-scale:0.62;--dsh-ts-star-delay:-0.67s;--dsh-ts-star-period:1.36s"></i><i class="dsh-thinking-slider-star" style="left:35.35%;top:59.27%;--dsh-ts-star-scale:0.77;--dsh-ts-star-delay:-0.56s;--dsh-ts-star-period:1.65s"></i><i class="dsh-thinking-slider-star" style="left:42.86%;top:75.61%;--dsh-ts-star-scale:1.06;--dsh-ts-star-delay:-0.39s;--dsh-ts-star-period:1.53s"></i><i class="dsh-thinking-slider-star" style="left:25.88%;top:47.53%;--dsh-ts-star-scale:1.01;--dsh-ts-star-delay:-0.75s;--dsh-ts-star-period:1.47s"></i><i class="dsh-thinking-slider-star" style="left:94.83%;top:73.84%;--dsh-ts-star-scale:0.72;--dsh-ts-star-delay:-0.53s;--dsh-ts-star-period:1.13s"></i><i class="dsh-thinking-slider-star" style="left:69.32%;top:50.06%;--dsh-ts-star-scale:0.58;--dsh-ts-star-delay:-1.43s;--dsh-ts-star-period:1.82s"></i><i class="dsh-thinking-slider-star" style="left:83.63%;top:51.38%;--dsh-ts-star-scale:0.69;--dsh-ts-star-delay:-1.31s;--dsh-ts-star-period:1.85s"></i><i class="dsh-thinking-slider-star" style="left:82.38%;top:49.88%;--dsh-ts-star-scale:1.2;--dsh-ts-star-delay:-0.69s;--dsh-ts-star-period:1.59s"></i><i class="dsh-thinking-slider-star" style="left:8%;top:27.7%;--dsh-ts-star-scale:1.38;--dsh-ts-star-delay:-1.53s;--dsh-ts-star-period:1.72s"></i></div><div class="dsh-thinking-slider-star-half"><i class="dsh-thinking-slider-star" style="left:72.09%;top:26.14%;--dsh-ts-star-scale:0.99;--dsh-ts-star-delay:-1.32s;--dsh-ts-star-period:1.22s"></i><i class="dsh-thinking-slider-star" style="left:55.92%;top:42.4%;--dsh-ts-star-scale:0.86;--dsh-ts-star-delay:-0.86s;--dsh-ts-star-period:1.19s"></i><i class="dsh-thinking-slider-star" style="left:45.84%;top:40.77%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.05s;--dsh-ts-star-period:1.75s"></i><i class="dsh-thinking-slider-star" style="left:29.06%;top:74.68%;--dsh-ts-star-scale:1.2;--dsh-ts-star-delay:-0.17s;--dsh-ts-star-period:1.26s"></i><i class="dsh-thinking-slider-star" style="left:79.76%;top:52.12%;--dsh-ts-star-scale:1.5;--dsh-ts-star-delay:-0.43s;--dsh-ts-star-period:1.25s"></i><i class="dsh-thinking-slider-star" style="left:73.26%;top:53.85%;--dsh-ts-star-scale:1.27;--dsh-ts-star-delay:-1.56s;--dsh-ts-star-period:1.64s"></i><i class="dsh-thinking-slider-star" style="left:50.35%;top:53.73%;--dsh-ts-star-scale:0.68;--dsh-ts-star-delay:-0.68s;--dsh-ts-star-period:1.85s"></i><i class="dsh-thinking-slider-star" style="left:52.16%;top:54.19%;--dsh-ts-star-scale:1.44;--dsh-ts-star-delay:-0.01s;--dsh-ts-star-period:1.64s"></i><i class="dsh-thinking-slider-star" style="left:52%;top:53.82%;--dsh-ts-star-scale:0.61;--dsh-ts-star-delay:-0.8s;--dsh-ts-star-period:1.88s"></i><i class="dsh-thinking-slider-star" style="left:5.83%;top:43.15%;--dsh-ts-star-scale:0.85;--dsh-ts-star-delay:-0.92s;--dsh-ts-star-period:1.8s"></i><i class="dsh-thinking-slider-star" style="left:58.5%;top:73.29%;--dsh-ts-star-scale:1.33;--dsh-ts-star-delay:-1.18s;--dsh-ts-star-period:1.52s"></i><i class="dsh-thinking-slider-star" style="left:60.22%;top:67.48%;--dsh-ts-star-scale:1.21;--dsh-ts-star-delay:-1.01s;--dsh-ts-star-period:1.84s"></i><i class="dsh-thinking-slider-star" style="left:40.92%;top:33.06%;--dsh-ts-star-scale:0.69;--dsh-ts-star-delay:-0.03s;--dsh-ts-star-period:1.52s"></i><i class="dsh-thinking-slider-star" style="left:82.11%;top:63.88%;--dsh-ts-star-scale:0.62;--dsh-ts-star-delay:-0.67s;--dsh-ts-star-period:1.36s"></i><i class="dsh-thinking-slider-star" style="left:35.35%;top:59.27%;--dsh-ts-star-scale:0.77;--dsh-ts-star-delay:-0.56s;--dsh-ts-star-period:1.65s"></i><i class="dsh-thinking-slider-star" style="left:42.86%;top:75.61%;--dsh-ts-star-scale:1.06;--dsh-ts-star-delay:-0.39s;--dsh-ts-star-period:1.53s"></i><i class="dsh-thinking-slider-star" style="left:25.88%;top:47.53%;--dsh-ts-star-scale:1.01;--dsh-ts-star-delay:-0.75s;--dsh-ts-star-period:1.47s"></i><i class="dsh-thinking-slider-star" style="left:94.83%;top:73.84%;--dsh-ts-star-scale:0.72;--dsh-ts-star-delay:-0.53s;--dsh-ts-star-period:1.13s"></i><i class="dsh-thinking-slider-star" style="left:69.32%;top:50.06%;--dsh-ts-star-scale:0.58;--dsh-ts-star-delay:-1.43s;--dsh-ts-star-period:1.82s"></i><i class="dsh-thinking-slider-star" style="left:83.63%;top:51.38%;--dsh-ts-star-scale:0.69;--dsh-ts-star-delay:-1.31s;--dsh-ts-star-period:1.85s"></i><i class="dsh-thinking-slider-star" style="left:82.38%;top:49.88%;--dsh-ts-star-scale:1.2;--dsh-ts-star-delay:-0.69s;--dsh-ts-star-period:1.59s"></i><i class="dsh-thinking-slider-star" style="left:8%;top:27.7%;--dsh-ts-star-scale:1.38;--dsh-ts-star-delay:-1.53s;--dsh-ts-star-period:1.72s"></i></div></div></div><div class="dsh-thinking-slider-knob" aria-hidden="true"></div><input type="range" class="dsh-thinking-slider-range" min="0" max="5" step="0.01" value="5" aria-label="推理强度" aria-valuetext="Ultra"></div></div></div></div>
+    <div class="pv-input">
+      <span class="pv-input-placeholder">给智能体发消息</span>
+      <button type="button" class="dsh-thinking-slider-trigger" style="display:inline-flex;align-items:center;gap:4px;height:28px;max-width:min(240px, 45cqw);padding:0 6px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:20px;cursor:pointer;white-space:nowrap" aria-label="推理强度：DeepSeek-V4.1-Flash · Ultra" aria-haspopup="dialog" aria-expanded="true" aria-busy="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg><span class="dsh-thinking-slider-trigger-model" style="flex-shrink:1000;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666)">DeepSeek-V4.1-Flash</span><span style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)" aria-hidden="true">·</span><span class="dsh-thinking-slider-trigger-level" style="flex:none;white-space:nowrap;color:var(--dsw-alias-label-caption, #999)">Ultra</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
+</section>
+<section class="pv-scene">
+  <h3 class="pv-scene-title">⑦ 选模型（清单展开）</h3>
+  <p class="pv-scene-note">卡头里那行模型名本身就是按钮：点开就是官方模型菜单的同一份数据（6 行 —— 两个 provider + 两个加载失败）。多项时插分组标题，当前项打勾，失败行不可选、hover 显示原因。<strong>点这一张里的模型行</strong>就能看到「图二（收起）⇄ 图一（展开）」的高度过渡。真机上卡片被锚在输入框上方（官方 <code>useAnchoredPosition</code> 对面板挂了 ResizeObserver，高度一变就重算 <code>top</code>），所以过渡时是<strong>底边不动、顶边往上长</strong>；预览页里卡片在普通文档流里，是顶边不动、往下长 —— 高度过渡本身完全一样。</p>
+  <div class="pv-composer" data-scene="2">
+    <div class="pv-cardwrap"><div style="position:fixed;z-index:1200;width:min(300px, calc(100vw - 24px));padding:12px 14px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);left:12px;top:12px" role="group" aria-label="推理强度" data-primitive="MenuSurface"><div class="dsh-thinking-slider-card-inner" style="display:flex;flex-direction:column;gap:10px"><div style="display:grid;grid-template-columns:28px 1fr 28px;align-items:center;gap:6px"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:color 240ms ease, filter 240ms ease;filter:none" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg></span><div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0"><button type="button" class="dsh-thinking-slider-advance" style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer;max-width:100%;min-width:0" aria-label="调到下一档"><span class="dsh-thinking-slider-level" style="margin:0;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:13px;font-weight:600;line-height:18px;white-space:nowrap;transition:color 240ms ease">高</span><span class="dsh-thinking-slider-chevron" style="color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:13px;line-height:18px;transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)" aria-hidden="true">›</span></button><button type="button" class="dsh-thinking-slider-model-row" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;max-width:100%;padding:2px 8px;margin:0;border:none;border-radius:8px;background:transparent;font:inherit;cursor:pointer" aria-haspopup="listbox" aria-expanded="true" aria-label="选择模型"><span style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a);transition:transform 180ms cubic-bezier(0.22, 1, 0.36, 1)"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><button type="button" class="dsh-thinking-slider-reset" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary, #8a8a8a);cursor:pointer;transition:color 200ms ease, background-color 200ms ease" aria-label="返回默认"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" class="dsh-thinking-slider-reset-glyph" style="display:block"><path d="M21 12a9 9 0 1 1-2.64-6.36"><path d="M21 4v5h-5"></svg></button></div><div class="dsh-thinking-slider-models-reveal" data-open="true"><div class="dsh-thinking-slider-models-clip"><div class="dsh-thinking-slider-models" style="display:flex;flex-direction:column;gap:1px;max-height:168px;overflow-y:auto;margin:0 -6px;padding:2px 6px;border-radius:10px" role="listbox" aria-label="选择模型"><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">账户</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" aria-selected="true"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true">✓</span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Flash</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1-Pro</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">DeepSeek-V4.1（无推理档位）</span></button><p style="margin:0;padding:6px 8px 2px;color:var(--dsw-alias-label-tertiary, #8a8a8a);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Anthropic</p><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap" aria-selected="false"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Opus 4</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" aria-selected="false" title="登录已过期，请重新授权"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">OpenAI</span></button><button type="button" role="option" class="dsh-thinking-slider-model-item" style="display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-state-error-primary, #d54941);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:default;white-space:nowrap;opacity:0.8" disabled="" aria-selected="false" title="无法连接"><span style="flex:none;width:12px;color:var(--dsw-alias-state-business-primary, #3078f0);font-size:12px;line-height:18px;text-align:center" aria-hidden="true"></span><span class="dsh-thinking-slider-model-name" style="margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666);font-size:12px;font-weight:400;line-height:16px;flex:0 1 auto;min-width:0">Google</span></button></div></div></div><div class="dsh-thinking-slider-rail" style="position:relative;width:100%;height:26px;border-radius:999px;overflow:visible;--dsh-ts-ratio:0.4;--dsh-ts-fill-color:var(--dsw-alias-state-business-primary, #3078f0);--dsh-ts-rest-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 14%, transparent);--dsh-ts-edge:color-mix(in srgb, var(--dsw-alias-border-l2, rgba(128,128,128,0.28)) 70%, transparent);--dsh-ts-dot-color:color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 42%, transparent);--dsh-ts-dot-passed-color:color-mix(in srgb, var(--dsw-alias-state-business-primary, #3078f0) 55%, #fff)"><div class="dsh-thinking-slider-track" aria-hidden="true"></div><div class="dsh-thinking-slider-fill" aria-hidden="true"></div><div class="dsh-thinking-slider-dots" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-dots dsh-thinking-slider-dots-passed" aria-hidden="true"><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span><span class="dsh-thinking-slider-dot"></span></div><div class="dsh-thinking-slider-knob" aria-hidden="true"></div><input type="range" class="dsh-thinking-slider-range" min="0" max="5" step="0.01" value="2" aria-label="推理强度" aria-valuetext="高"></div></div></div></div>
+    <div class="pv-input">
+      <span class="pv-input-placeholder">给智能体发消息</span>
+      <button type="button" class="dsh-thinking-slider-trigger" style="display:inline-flex;align-items:center;gap:4px;height:28px;max-width:min(240px, 45cqw);padding:0 6px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary, #666);font:inherit;font-size:13px;line-height:20px;cursor:pointer;white-space:nowrap" aria-label="推理强度：DeepSeek-V4.1-Flash · 高" aria-haspopup="dialog" aria-expanded="true" aria-busy="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke-width="1" style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)">
+  <path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="currentColor"/>
+  <path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="currentColor"/>
+  <path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="currentColor"/>
+</svg><span class="dsh-thinking-slider-trigger-model" style="flex-shrink:1000;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary, #666)">DeepSeek-V4.1-Flash</span><span style="flex:none;color:var(--dsw-alias-label-tertiary, #8a8a8a)" aria-hidden="true">·</span><span class="dsh-thinking-slider-trigger-level" style="flex:none;white-space:nowrap;color:var(--dsw-alias-label-caption, #999)">高</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
+</section>
+</div>
+
+<section class="pv-facts">
+  <h3>关键数值</h3>
+  <table>
+    <tbody>
+      <tr><th>轨道</th><td>高 26px 满圆角；圆钮 30px > 轨道，所以上下各溢出 —— 素材就是这么画的（49 > 38）</td></tr>
+      <tr><th>端点内缩</th><td>15px = 圆钮半径，刻度点因此正好压在原生 range 的圆钮行程上</td></tr>
+      <tr><th>已填充段</th><td>`var(--dsw-alias-state-business-primary, #3078f0)`（素材实测 rgb(48,120,240)）</td></tr>
+      <tr><th>未填充段</th><td>`color-mix(in srgb, var(--dsw-alias-label-primary, inherit) 14%, transparent)`</td></tr>
+      <tr><th>刻度点</th><td>每档一颗、直径 4px；未到达是中性灰，被填充盖住那颗是「品牌蓝 + 白」——两层叠着用 `clip-path` 裁</td></tr>
+      <tr><th>圆钮</th><td>30px 白色实心 + 双层投影，hover 放大 1.06、按住 1.16 并带 7px 光晕</td></tr>
+      <tr><th>步进</th><td>`step: 0.01` —— **连续**跟手，档位由四舍五入决定（不是一格格跳）</td></tr>
+      <tr><th>拖动中</th><td>只写 `--dsh-ts-ratio` 这一个 CSS 变量到滑轨外层，不进 React state；一次拖动只在跨档时重渲染</td></tr>
+      <tr><th>比例过渡</th><td>`transition: --dsh-ts-ratio 320ms cubic-bezier(0.34,1.28,0.64,1)`；拖动中临时 `transition: none`</td></tr>
+      <tr><th>松手</th><td>**吸附到最近的档位**（`Math.round`，正好在中点时朝强度更高一侧）：草稿值从连续落点换成档位下标，由上面那条 320ms 回弹过渡滑到档位中心 —— 拖动中不吸附（否则一格格跳），只在松手这一刻吸</td></tr>
+      <tr><th>清单开合</th><td>卡头模型行点开 ⇄ 收起：外层 reveal 走 grid-template-rows 的 0fr ↔ 1fr（300ms），卡片高度跟着一起长/缩；内层 clip 裁切，清单本体 opacity + translateY(-6px) 淡入下移。清单常驻 DOM —— 收起时若节点直接消失，内容会先在 1 帧内没了、空出来的高度再慢慢收，像被「抽走」；收起态靠 aria-hidden + 每行 tabIndex -1 挡住读屏与 Tab</td></tr>
+      <tr><th>换档动效</th><td>档位名重挂 → `dsh-ts-level-in` 200ms 淡入 + 上浮 3px；卡片进场 `dsh-ts-card-in` 180ms</td></tr>
+      <tr><th>渐变进出</th><td>非最高档 `opacity: 0` → 最高档 `opacity: 1`，280ms 淡入淡出（不是硬闪）</td></tr>
+      <tr><th>最高档判定</th><td>effort ∈ ["xhigh","max","ultra"]（Ultra 额外拿 `data-boost="fast"`）</td></tr>
+      <tr><th>最高档渐变</th><td>`linear-gradient(105deg, #0818e0 0%, #4020e8 24%, #a828e8 48%, #c65cf5 62%, #4020e8 82%, #0818e0 100%)` + `background-size: 220% 100%` + `dsh-ts-effort-flow` 6s（Ultra 4s）往复</td></tr>
+      <tr><th>星尘</th><td>确定性哈希布点（`starStyleFor`，不用 Math.random），两份星图整体左移 50% 无缝循环；最高档 12 颗、Ultra 22 颗</td></tr>
+      <tr><th>降级</th><td>`@media (prefers-reduced-motion: reduce)` 关掉流动、星尘闪烁与所有过渡</td></tr>
+      <tr><th>禁用态</th><td>`.dsh-thinking-slider-rail:has(range:disabled) { opacity: .55 }`</td></tr>
+      <tr><th>接管官方座位</th><td>官方 `conversation.input.model` 是 **single** 插槽（`dsh-client-ui-slots/lib/index.js:172` 直接抛「already has a registration」）—— 抢不过来，只能在运行时给它的 DOM 打 `data-dsh-thinking-slider-native="hidden"` + CSS `display:none`。判据是「这一排里最后一个带 `aria-haspopup="menu"` 的兄弟节点」，切会话重挂 DOM 时由 `MutationObserver` 重打标记，官方把它锁住（`disabled`）时不接管。</td></tr>
+      <tr><th>模型清单</th><td>卡头里那行模型名就是按钮：`modelChoicesOf(snapshot)` 把官方 `groups` / `failures` 铺平（与官方 `optionsOf` 同源、顺序一致），点击即 `directory.select({provider, model, reasoningEffort?})`</td></tr>
+      <tr><th>换模型带档位</th><td>`transferEffort`：目标模型声明了同 id 档位就保留（官方 `selectionOf` 是一律回新模型的 `defaultEffort`，这里**有意不同** —— 换 provider 时「高」还是「高」）；没声明就省略该字段，等于用目标模型的默认档</td></tr>
+      <tr><th>触发 chip</th><td>`模型名 · 档位`；模型不支持推理等级时只剩模型名 —— 这时它就是一个**纯模型选择器**（所以它不能再像以前那样整段不渲染）</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<details>
+  <summary>插件注入的 RANGE_CSS（逐字，309 行）</summary>
+  <pre>/* 把「比例」注册成可补间的数值类型：点击轨道 / 键盘跳档 / 返回默认时，
+   填充、圆钮、刻度点会一起缓动过去；拖动中由 JS 临时把过渡关掉（跟手优先）。
+   —— 「丝滑」就是这两半合起来的手感。 */
+@property --dsh-ts-ratio {
+  syntax: &quot;&lt;number&gt;&quot;;
+  inherits: true;
+  initial-value: 0;
+}
+
+/* 滑轨行：比例过渡挂在这一层，所有子元素共享同一个已补间的值。 */
+.dsh-thinking-slider-rail {
+  transition: --dsh-ts-ratio 320ms cubic-bezier(0.34, 1.28, 0.64, 1), box-shadow 280ms ease;
+}
+
+/* 底色轨道：胖胶囊 + 1px 极淡描边。 */
+.dsh-thinking-slider-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--dsh-ts-rest-color, rgba(128,128,128,0.14));
+  box-shadow: inset 0 0 0 1px var(--dsh-ts-edge, rgba(128,128,128,0.2));
+  pointer-events: none;
+}
+
+/* 填充段：宽度 = 圆钮半径 + ratio * (100% - 2*圆钮半径)，
+   和原生 range 圆钮的行程完全重合 —— 所以填充边界总是压在圆钮中心下面。 */
+.dsh-thinking-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 999px;
+  width: calc(15px + var(--dsh-ts-ratio, 0) * (100% - 30px));
+  background: var(--dsh-ts-fill-color, #3078f0);
+  pointer-events: none;
+  transition: background-color 320ms ease;
+}
+/* 最高档：填充段上叠一层流动的品牌渐变，用 opacity 淡入淡出 —— 进/出最高档
+   是一次 280ms 的过渡，而不是渐变硬闪。 */
+.dsh-thinking-slider-fill::after {
+  content: &quot;&quot;;
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background-image: linear-gradient(105deg, #0818e0 0%, #4020e8 24%, #a828e8 48%, #c65cf5 62%, #4020e8 82%, #0818e0 100%);
+  background-size: 220% 100%;
+  background-position: 50% 50%;
+  opacity: 0;
+  transition: opacity 280ms ease;
+}
+.dsh-thinking-slider-rail[data-boost] .dsh-thinking-slider-fill::after { opacity: 1; }
+
+/* 刻度点：每档一颗，铺在圆钮的行程上（左右各内缩一个圆钮半径）。
+   两层同样的点：底层灰点，上层「已通过」的浅蓝点，后者被裁到填充宽度。 */
+.dsh-thinking-slider-dots {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
+  pointer-events: none;
+}
+.dsh-thinking-slider-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--dsh-ts-dot-color, rgba(128,128,128,0.42));
+  transition: background-color 240ms ease;
+}
+.dsh-thinking-slider-dots-passed {
+  clip-path: inset(0 calc(100% - (15px + var(--dsh-ts-ratio, 0) * (100% - 30px))) 0 0);
+}
+.dsh-thinking-slider-dots-passed .dsh-thinking-slider-dot {
+  background: var(--dsh-ts-dot-passed-color, rgba(109,181,255,1));
+}
+
+/* 白圆钮：**自己画的**（原生圆钮透明）。位置同样由比例算出来，所以它会跟着
+   填充边界一起缓动；直径比轨道大，上下各溢出 2px —— 素材里那颗钮就是骑在轨道上的。 */
+.dsh-thinking-slider-knob {
+  position: absolute;
+  top: 50%;
+  left: calc(15px + var(--dsh-ts-ratio, 0) * (100% - 30px));
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.22), 0 3px 10px rgba(0,0,0,0.16);
+  pointer-events: none;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease, opacity 160ms ease;
+}
+.dsh-thinking-slider-rail:hover .dsh-thinking-slider-knob { transform: scale(1.06); }
+.dsh-thinking-slider-rail:has(.dsh-thinking-slider-range:active) .dsh-thinking-slider-knob {
+  transform: scale(1.16);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.22), 0 4px 12px rgba(0,0,0,0.2), 0 0 0 7px color-mix(in srgb, var(--dsw-alias-state-business-primary, #3078f0) 14%, transparent);
+}
+/* 提交中：只把圆钮压暗一点点，**不禁用滑轨** —— 禁用会让整行在提交往返里闪一下
+   透明度，那正是「拖到松手时感觉卡一下」的来源之一。 */
+.dsh-thinking-slider-rail:has(.dsh-thinking-slider-range[data-busy=&quot;true&quot;]) .dsh-thinking-slider-knob { opacity: 0.72; }
+.dsh-thinking-slider-rail:has(.dsh-thinking-slider-range:disabled) { opacity: 0.55; }
+.dsh-thinking-slider-rail:has(.dsh-thinking-slider-range:disabled) .dsh-thinking-slider-knob { transform: none; }
+.dsh-thinking-slider-rail:has(.dsh-thinking-slider-range:focus-visible) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary, #3078f0) 55%, transparent);
+}
+
+/* 最高档：轨道外一圈亮边 + 外发光（让它在浅色/深色页面上都「烫」起来）。 */
+.dsh-thinking-slider-rail[data-boost] {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-business-primary, #4d6bfe) 45%, transparent), 0 0 12px color-mix(in srgb, var(--dsw-alias-state-business-primary, #4d6bfe) 24%, transparent);
+}
+
+/* 星尘：两半同样的星图首尾相接，整体左移 50% 后正好无缝循环（素材里那些白点）。 */
+.dsh-thinking-slider-stars {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 320ms ease;
+}
+.dsh-thinking-slider-rail[data-boost] .dsh-thinking-slider-stars { opacity: 1; }
+.dsh-thinking-slider-starfield {
+  display: flex;
+  width: 200%;
+  height: 100%;
+  animation: dsh-ts-starfield 3s linear infinite;
+}
+.dsh-thinking-slider-rail[data-boost=&quot;fast&quot;] .dsh-thinking-slider-starfield { animation-duration: 1.6s; }
+.dsh-thinking-slider-star-half { position: relative; width: 50%; height: 100%; }
+.dsh-thinking-slider-star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  margin: -1px 0 0 -1px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255,255,255,0.8);
+  animation: dsh-ts-twinkle var(--dsh-ts-star-period, 2.2s) ease-in-out var(--dsh-ts-star-delay, 0s) infinite alternate;
+}
+
+/* 原生 input：轨道与圆钮全部透明，只留命中盒（尺寸与自绘轨道一致）。
+   拖动、点击、键盘因此仍然是浏览器原生行为，视觉却完全由上面几层决定。 */
+.dsh-thinking-slider-range {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  width: 100%;
+  height: 26px;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.dsh-thinking-slider-range:disabled { cursor: default; }
+.dsh-thinking-slider-range::-webkit-slider-runnable-track {
+  height: 26px;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+}
+.dsh-thinking-slider-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  margin-top: -2px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+.dsh-thinking-slider-range::-moz-range-track {
+  height: 26px;
+  border-radius: 999px;
+  background: transparent;
+}
+.dsh-thinking-slider-range::-moz-range-progress { background: transparent; }
+.dsh-thinking-slider-range::-moz-range-thumb {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* 触发 chip：中性 hover / 展开态；最高档时整枚 chip 由 JS 换成紫色。 */
+.dsh-thinking-slider-trigger { transition: color 240ms ease, background-color 200ms ease; }
+.dsh-thinking-slider-trigger:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12)); }
+.dsh-thinking-slider-trigger:active,
+.dsh-thinking-slider-trigger[aria-expanded=&quot;true&quot;] { background: var(--dsw-alias-interactive-bg-active, rgba(128,128,128,0.18)); }
+.dsh-thinking-slider-trigger:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #0d0d0d); outline-offset: 1px; }
+
+/* 官方「选择模型 / 推理等级」座位（single 插槽，抢不过来）：
+   本插件已经接管这两件事，所以运行时给它打上这个标记把官方那枚 chip 藏掉。
+   标记只在**我们自己能用同一份目录数据**（目录服务已就绪）且官方座位**没被锁**时
+   才打上去，卸载时撤掉 —— 控件不可用时用户永远还有官方那一扇门。 */
+[data-dsh-thinking-slider-native=&quot;hidden&quot;] { display: none !important; }
+
+/* 卡片里的模型行（模型名 ▾）：点开滑条上方的模型清单。 */
+.dsh-thinking-slider-model-row { transition: color 200ms ease, background-color 200ms ease; }
+.dsh-thinking-slider-model-row:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12)); }
+.dsh-thinking-slider-model-row:active,
+.dsh-thinking-slider-model-row[aria-expanded=&quot;true&quot;] { background: var(--dsw-alias-interactive-bg-active, rgba(128,128,128,0.18)); }
+.dsh-thinking-slider-model-row:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #0d0d0d); outline-offset: 1px; }
+.dsh-thinking-slider-model-row[aria-expanded=&quot;true&quot;] .dsh-thinking-slider-model-chevron { transform: rotate(180deg); }
+
+/* 模型清单的开合过渡（图二「收起」↔ 图一「展开」）。
+   外层 reveal 用 grid-template-rows 的 0fr ↔ 1fr —— 这是少数能把「高度 auto」也
+   做成可过渡的办法，于是**卡片自身的高度跟着一起长/缩**，不是清单「啪」地出现、
+   卡片再跳一下。内层 clip 负责裁切（顺便给清单那 -6px 的横向负 margin 留出位置，
+   否则细滚动条会被裁掉半边）。清单本体再淡入 + 轻微下移。
+   注意清单是**常驻 DOM**的（不是展开才挂载）：收起时若节点直接消失，内容会在
+   1 帧内先没了、空出来的高度再慢慢收，看着像被「抽走」；常驻才能让淡出与收缩
+   同步。收起态用 aria-hidden + 每行 tabIndex -1 挡住读屏与 Tab。 */
+.dsh-thinking-slider-models-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-bottom 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dsh-thinking-slider-models-reveal[data-open=&quot;true&quot;] { grid-template-rows: 1fr; }
+/* 卡片内容列是 gap: 10px：reveal 夹在卡头与滑轨之间，收起时它会白吃一条 gap
+   （卡片比改动前高 10px、多出一条空带）。抵掉一个，卡片高度与以前逐像素一致；
+   展开时清单本来就要吃两个 gap，所以是 0。margin 一起过渡，开合才不跳。 */
+.dsh-thinking-slider-models-reveal[data-open=&quot;false&quot;] { margin-bottom: -10px; }
+.dsh-thinking-slider-models-clip {
+  min-height: 0;
+  overflow: hidden;
+  /* 让出清单 margin: 0 -6px 的那 6px：横向不能裁，纵向要裁。 */
+  margin: 0 -6px;
+  padding: 0 6px;
+}
+.dsh-thinking-slider-models {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 170ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  scrollbar-width: thin;
+}
+.dsh-thinking-slider-models-reveal[data-open=&quot;true&quot;] .dsh-thinking-slider-models { opacity: 1; transform: none; }
+.dsh-thinking-slider-model-item { transition: background-color 180ms ease, color 180ms ease; }
+.dsh-thinking-slider-model-item:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12)); }
+.dsh-thinking-slider-model-item:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #0d0d0d); outline-offset: -2px; }
+.dsh-thinking-slider-model-item[aria-selected=&quot;true&quot;] .dsh-thinking-slider-model-name { color: var(--dsw-alias-label-primary, inherit); }
+
+/* 卡片进场：淡入 + 轻微上浮。 */
+.dsh-thinking-slider-card { animation: dsh-ts-card-in 180ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* 档位名切换：淡入 + 上浮（React 侧给 key，动画因此每次换档都会重播）。 */
+.dsh-thinking-slider-level { animation: dsh-ts-level-in 200ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* 「等级名 ›」按钮：hover 时箭头右移一点 —— 素材里那个 `›` 就是「下一档」的暗示。 */
+.dsh-thinking-slider-advance { transition: color 200ms ease, background-color 200ms ease; }
+.dsh-thinking-slider-advance:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12)); }
+.dsh-thinking-slider-advance:hover .dsh-thinking-slider-chevron { transform: translateX(2px); }
+.dsh-thinking-slider-advance:disabled { cursor: default; opacity: 0.75; }
+.dsh-thinking-slider-advance:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #0d0d0d); outline-offset: 1px; }
+
+/* 重置 ↻：按下时转半圈，hover 时变亮并出现一枚中性底。 */
+.dsh-thinking-slider-reset:hover { color: var(--dsw-alias-label-primary, inherit); background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12)); }
+.dsh-thinking-slider-reset:active .dsh-thinking-slider-reset-glyph { transform: rotate(-180deg); }
+.dsh-thinking-slider-reset-glyph { transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1); }
+.dsh-thinking-slider-reset:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #0d0d0d); outline-offset: 1px; }
+
+/* 最高档的「流动」：填充段上那层渐变缓慢左右移动（最高档 6s、Ultra 4s）。 */
+.dsh-thinking-slider-rail[data-boost] .dsh-thinking-slider-fill::after { animation: dsh-ts-effort-flow 6s ease-in-out infinite alternate; }
+.dsh-thinking-slider-rail[data-boost=&quot;fast&quot;] .dsh-thinking-slider-fill::after { animation-duration: 4s; }
+
+@keyframes dsh-ts-card-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes dsh-ts-level-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes dsh-ts-effort-flow {
+  from { background-position: 0% 50%; }
+  to { background-position: 100% 50%; }
+}
+@keyframes dsh-ts-starfield {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+@keyframes dsh-ts-twinkle {
+  from { opacity: 0.25; transform: scale(calc(var(--dsh-ts-star-scale, 1) * 0.55)); }
+  to { opacity: 1; transform: scale(var(--dsh-ts-star-scale, 1)); }
+}
+
+/* 系统级「减弱动态效果」：动效全部关掉，控件仍然完全可用。 */
+@media (prefers-reduced-motion: reduce) {
+  .dsh-thinking-slider-rail,
+  .dsh-thinking-slider-fill,
+  .dsh-thinking-slider-fill::after,
+  .dsh-thinking-slider-knob,
+  .dsh-thinking-slider-star,
+  .dsh-thinking-slider-starfield,
+  .dsh-thinking-slider-card,
+  .dsh-thinking-slider-models-reveal,
+  .dsh-thinking-slider-models-clip,
+  .dsh-thinking-slider-models,
+  .dsh-thinking-slider-level,
+  .dsh-thinking-slider-range {
+    animation: none !important;
+    transition: none !important;
+  }
+}</pre>
+</details>
+
+<script type="application/json" id="pv-scenes">[{"names":["轻度","中","高","极高","最高","Ultra"],"efforts":["low","medium","high","xhigh","max","ultra"],"boostEfforts":["xhigh","max","ultra"],"step":0.01},{"names":["轻度","中","高","极高","最高","Ultra"],"efforts":["low","medium","high","xhigh","max","ultra"],"boostEfforts":["xhigh","max","ultra"],"step":0.01},{"names":["轻度","中","高","极高","最高","Ultra"],"efforts":["low","medium","high","xhigh","max","ultra"],"boostEfforts":["xhigh","max","ultra"],"step":0.01},{"names":["轻度","中","高","极高","最高","Ultra"],"efforts":["low","medium","high","xhigh","max","ultra"],"boostEfforts":["xhigh","max","ultra"],"step":0.01},{"names":["轻度","中","高","极高","最高","Ultra"],"efforts":["low","medium","high","xhigh","max","ultra"],"boostEfforts":["xhigh","max","ultra"],"step":0.01},{"names":["轻度","中","高","极高","最高","Ultra"],"efforts":["low","medium","high","xhigh","max","ultra"],"boostEfforts":["xhigh","max","ultra"],"step":0.01}]</script>
+<script type="application/json" id="pv-stars">{"true":[{"left":"72.09%","top":"26.14%","--dsh-ts-star-scale":"0.99","--dsh-ts-star-delay":"-2.15s","--dsh-ts-star-period":"1.99s"},{"left":"55.92%","top":"42.4%","--dsh-ts-star-scale":"0.86","--dsh-ts-star-delay":"-1.4s","--dsh-ts-star-period":"1.93s"},{"left":"45.84%","top":"40.77%","--dsh-ts-star-scale":"1.5","--dsh-ts-star-delay":"-0.09s","--dsh-ts-star-period":"2.77s"},{"left":"29.06%","top":"74.68%","--dsh-ts-star-scale":"1.2","--dsh-ts-star-delay":"-0.28s","--dsh-ts-star-period":"2.04s"},{"left":"79.76%","top":"52.12%","--dsh-ts-star-scale":"1.5","--dsh-ts-star-delay":"-0.69s","--dsh-ts-star-period":"2.03s"},{"left":"73.26%","top":"53.85%","--dsh-ts-star-scale":"1.27","--dsh-ts-star-delay":"-2.53s","--dsh-ts-star-period":"2.62s"},{"left":"50.35%","top":"53.73%","--dsh-ts-star-scale":"0.68","--dsh-ts-star-delay":"-1.11s","--dsh-ts-star-period":"2.92s"},{"left":"52.16%","top":"54.19%","--dsh-ts-star-scale":"1.44","--dsh-ts-star-delay":"-0.01s","--dsh-ts-star-period":"2.61s"},{"left":"52%","top":"53.82%","--dsh-ts-star-scale":"0.61","--dsh-ts-star-delay":"-1.3s","--dsh-ts-star-period":"2.97s"},{"left":"5.83%","top":"43.15%","--dsh-ts-star-scale":"0.85","--dsh-ts-star-delay":"-1.5s","--dsh-ts-star-period":"2.85s"},{"left":"58.5%","top":"73.29%","--dsh-ts-star-scale":"1.33","--dsh-ts-star-delay":"-1.92s","--dsh-ts-star-period":"2.43s"},{"left":"60.22%","top":"67.48%","--dsh-ts-star-scale":"1.21","--dsh-ts-star-delay":"-1.64s","--dsh-ts-star-period":"2.91s"}],"fast":[{"left":"72.09%","top":"26.14%","--dsh-ts-star-scale":"0.99","--dsh-ts-star-delay":"-1.32s","--dsh-ts-star-period":"1.22s"},{"left":"55.92%","top":"42.4%","--dsh-ts-star-scale":"0.86","--dsh-ts-star-delay":"-0.86s","--dsh-ts-star-period":"1.19s"},{"left":"45.84%","top":"40.77%","--dsh-ts-star-scale":"1.5","--dsh-ts-star-delay":"-0.05s","--dsh-ts-star-period":"1.75s"},{"left":"29.06%","top":"74.68%","--dsh-ts-star-scale":"1.2","--dsh-ts-star-delay":"-0.17s","--dsh-ts-star-period":"1.26s"},{"left":"79.76%","top":"52.12%","--dsh-ts-star-scale":"1.5","--dsh-ts-star-delay":"-0.43s","--dsh-ts-star-period":"1.25s"},{"left":"73.26%","top":"53.85%","--dsh-ts-star-scale":"1.27","--dsh-ts-star-delay":"-1.56s","--dsh-ts-star-period":"1.64s"},{"left":"50.35%","top":"53.73%","--dsh-ts-star-scale":"0.68","--dsh-ts-star-delay":"-0.68s","--dsh-ts-star-period":"1.85s"},{"left":"52.16%","top":"54.19%","--dsh-ts-star-scale":"1.44","--dsh-ts-star-delay":"-0.01s","--dsh-ts-star-period":"1.64s"},{"left":"52%","top":"53.82%","--dsh-ts-star-scale":"0.61","--dsh-ts-star-delay":"-0.8s","--dsh-ts-star-period":"1.88s"},{"left":"5.83%","top":"43.15%","--dsh-ts-star-scale":"0.85","--dsh-ts-star-delay":"-0.92s","--dsh-ts-star-period":"1.8s"},{"left":"58.5%","top":"73.29%","--dsh-ts-star-scale":"1.33","--dsh-ts-star-delay":"-1.18s","--dsh-ts-star-period":"1.52s"},{"left":"60.22%","top":"67.48%","--dsh-ts-star-scale":"1.21","--dsh-ts-star-delay":"-1.01s","--dsh-ts-star-period":"1.84s"},{"left":"40.92%","top":"33.06%","--dsh-ts-star-scale":"0.69","--dsh-ts-star-delay":"-0.03s","--dsh-ts-star-period":"1.52s"},{"left":"82.11%","top":"63.88%","--dsh-ts-star-scale":"0.62","--dsh-ts-star-delay":"-0.67s","--dsh-ts-star-period":"1.36s"},{"left":"35.35%","top":"59.27%","--dsh-ts-star-scale":"0.77","--dsh-ts-star-delay":"-0.56s","--dsh-ts-star-period":"1.65s"},{"left":"42.86%","top":"75.61%","--dsh-ts-star-scale":"1.06","--dsh-ts-star-delay":"-0.39s","--dsh-ts-star-period":"1.53s"},{"left":"25.88%","top":"47.53%","--dsh-ts-star-scale":"1.01","--dsh-ts-star-delay":"-0.75s","--dsh-ts-star-period":"1.47s"},{"left":"94.83%","top":"73.84%","--dsh-ts-star-scale":"0.72","--dsh-ts-star-delay":"-0.53s","--dsh-ts-star-period":"1.13s"},{"left":"69.32%","top":"50.06%","--dsh-ts-star-scale":"0.58","--dsh-ts-star-delay":"-1.43s","--dsh-ts-star-period":"1.82s"},{"left":"83.63%","top":"51.38%","--dsh-ts-star-scale":"0.69","--dsh-ts-star-delay":"-1.31s","--dsh-ts-star-period":"1.85s"},{"left":"82.38%","top":"49.88%","--dsh-ts-star-scale":"1.2","--dsh-ts-star-delay":"-0.69s","--dsh-ts-star-period":"1.59s"},{"left":"8%","top":"27.7%","--dsh-ts-star-scale":"1.38","--dsh-ts-star-delay":"-1.53s","--dsh-ts-star-period":"1.72s"}]}</script>
+<script>
+  const root = document.documentElement;
+  const themeButtons = Array.from(document.querySelectorAll("[data-pv-theme]"));
+  function applyTheme(theme) {
+    root.dataset.theme = theme;
+    for (const button of themeButtons) button.setAttribute("aria-pressed", String(button.dataset.pvTheme === theme));
+  }
+  for (const button of themeButtons) button.addEventListener("click", () => applyTheme(button.dataset.pvTheme));
+  const media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  applyTheme(media !== null && media.matches ? "dark" : "dark");
+
+  /* ---- 拖动演示：与组件 onInput / onRelease 的等价实现 ------------------
+   * 唯一目的是让人能**用手**核对「跟手 / 淡入 / 流动 / 星尘 / 落点」这五件事。
+   * 逻辑抄自 lib/client.js：比例 = position / (档位数 - 1)，档位由 Math.round 决定，
+   * 拖动中把滑轨外层那条 320ms 过渡临时压成 none（否则填充会去追手指）。 */
+  const SCENES = JSON.parse(document.getElementById("pv-scenes").textContent);
+  const STAR_STYLES = JSON.parse(document.getElementById("pv-stars").textContent);
+  const STAR_VARS = ["--dsh-ts-star-scale", "--dsh-ts-star-delay", "--dsh-ts-star-period"];
+
+  function buildStars(kind) {
+    const wrap = document.createElement("div");
+    wrap.className = "dsh-thinking-slider-stars";
+    wrap.setAttribute("aria-hidden", "true");
+    const field = document.createElement("div");
+    field.className = "dsh-thinking-slider-starfield";
+    for (const half of [0, 1]) {
+      const box = document.createElement("div");
+      box.className = "dsh-thinking-slider-star-half";
+      for (const spec of STAR_STYLES[kind]) {
+        const star = document.createElement("i");
+        star.className = "dsh-thinking-slider-star";
+        star.style.left = spec.left;
+        star.style.top = spec.top;
+        for (const name of STAR_VARS) star.style.setProperty(name, spec[name]);
+        box.appendChild(star);
+      }
+      field.appendChild(box);
+    }
+    wrap.appendChild(field);
+    return wrap;
+  }
+
+  for (const composer of document.querySelectorAll(".pv-composer")) {
+    const data = SCENES[Number(composer.dataset.scene)];
+    const input = composer.querySelector(".dsh-thinking-slider-range");
+    const rail = composer.querySelector(".dsh-thinking-slider-rail");
+    const card = composer.querySelector(".dsh-thinking-slider-card-inner");
+    const label = composer.querySelector(".dsh-thinking-slider-level");
+    const trigger = composer.querySelector(".dsh-thinking-slider-trigger");
+    if (data === undefined || input === null || rail === null) continue;
+    const BOOST = new Set(data.boostEfforts);
+    const last = data.names.length - 1;
+    const levelOf = (position) => Math.min(Math.max(Math.round(position), 0), last);
+    let shown = levelOf(Number(input.value));
+
+    /** 档位名（卡片内 + 触发按钮）+ 最高档配色，一次改到位。 */
+    const paintLevel = (index) => {
+      if (label !== null) {
+        label.textContent = data.names[index];
+        // 重挂 class 让 dsh-ts-level-in 重播（React 那边靠 key 重挂节点）。
+        label.classList.remove("dsh-thinking-slider-level");
+        void label.offsetWidth;
+        label.classList.add("dsh-thinking-slider-level");
+      }
+      input.setAttribute("aria-valuetext", data.names[index]);
+      // 触发按钮里有两段文字：模型名 + 档位名。档位名必须**按 class** 找 ——
+      // 按「所有非空 span」扫会把模型名也写成档位名（这枚 chip 现在是「谁 + 多强」）。
+      if (trigger !== null) {
+        const triggerLevel = trigger.querySelector(".dsh-thinking-slider-trigger-level");
+        if (triggerLevel !== null) triggerLevel.textContent = data.names[index];
+      }
+    };
+    const paintBoost = (index) => {
+      const effort = data.efforts[index];
+      const kind = BOOST.has(effort) ? (effort === "ultra" ? "fast" : "true") : null;
+      if (kind === null) delete rail.dataset.boost;
+      else rail.dataset.boost = kind;
+      const old = rail.querySelector(".dsh-thinking-slider-stars");
+      if (old !== null) old.remove();
+      if (kind !== null) rail.insertBefore(buildStars(kind), rail.querySelector(".dsh-thinking-slider-knob"));
+    };
+    const paint = (index) => {
+      if (index === shown) return;
+      shown = index;
+      paintLevel(index);
+      paintBoost(index);
+    };
+
+    paintBoost(shown);
+    input.addEventListener("input", () => {
+      const position = Number(input.value);
+      rail.style.setProperty("transition", "none");
+      rail.style.setProperty("--dsh-ts-ratio", String(last <= 0 ? 0 : Math.min(Math.max(position, 0), last) / last));
+      paint(levelOf(position));
+    });
+    // 松手 / 键盘改档：先恢复 CSS 里的 320ms 过渡，**再**把落点吸附到最近的档位中心。
+    // 顺序不能反：transition 还写着 none 的时候改比例 = 这次吸附会瞬移（组件里 onRelease 同序）。
+    for (const type of ["pointerup", "pointercancel", "change", "blur"]) {
+      input.addEventListener(type, () => {
+        const level = levelOf(Number(input.value));
+        input.value = String(level);
+        rail.style.removeProperty("transition");
+        rail.style.setProperty("--dsh-ts-ratio", String(last <= 0 ? 0 : level / last));
+        paint(level);
+      });
+    }
+
+    // 模型清单的开合演示：翻 reveal 的 data-open（样式在插件注入的 CSS 里），
+    // 与组件 setModelsOpen 等价 —— 收起时清单只是被裁掉，顺手把 Tab 停靠点去掉。
+    const modelRow = composer.querySelector(".dsh-thinking-slider-model-row");
+    const reveal = composer.querySelector(".dsh-thinking-slider-models-reveal");
+    if (modelRow !== null && reveal !== null) {
+      modelRow.addEventListener("click", () => {
+        const open = reveal.dataset.open !== "true";
+        reveal.dataset.open = String(open);
+        modelRow.setAttribute("aria-expanded", String(open));
+        if (open) reveal.removeAttribute("aria-hidden");
+        else reveal.setAttribute("aria-hidden", "true");
+        for (const item of reveal.querySelectorAll("[role=option]")) {
+          if (open) item.removeAttribute("tabindex");
+          else item.setAttribute("tabindex", "-1");
+        }
+      });
+    }
+  }
+</script>
+</body>
+</html>
